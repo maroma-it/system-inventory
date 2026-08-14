@@ -81,27 +81,6 @@ if not exist "data\" (
     echo [SETUP] Creating missing data\ folder.
     mkdir "data"
 )
-if not exist "data\README.txt" (
-    (
-        echo Drop workspace data here to build the inventory / explorer.
-        echo.
-        echo Any platform export JSON goes anywhere under data\^<slug^>\ - the rebuild
-        echo detects what each file is ^(whole-workspace export, individual form design,
-        echo or individual workflow^) and routes it automatically. No manual placement:
-        echo the forms\ and workflows\ subfolders still work but nothing requires them.
-        echo.
-        echo   data\^<slug^>\^<any-name^>.json    e.g. data\liwp\low-income_weatherization_program.json
-        echo.
-        echo An individual form/workflow export always overrides the same form/workflow
-        echo in the whole-workspace baseline ^(a surgical update^).
-        echo.
-        echo Known slugs already published from this repo: liwp, nve-qar, sce-be, sdge-whp, socal-whp
-        echo Slugs use hyphens, not underscores.
-        echo.
-        echo Full details: see "Adding a new workspace" in CLAUDE.md.
-    ) > "data\README.txt"
-    echo [SETUP] Wrote data\README.txt with drop-in instructions.
-)
 echo.
 
 REM --- Rebuild the artifacts ---

@@ -267,6 +267,7 @@ def _build_html(agg, reg):
         },
     }
     data_json = json.dumps(viz, separators=(",", ":")).replace("</", "<\\/")
+    data_json = narrate.redact_public_text(data_json)
     html = TEMPLATE.replace("__DATA__", data_json)
 
     GLOBAL_DIR.mkdir(parents=True, exist_ok=True)

@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import re
-from copy import deepcopy
+import tempfile
+import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -43,7 +46,8 @@ def _utc_now() -> str:
 
 
 def _slug_id(label: str | None = None) -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f")
+    stamp = f"{stamp}-{uuid.uuid4().hex[:12]}"
     if not label:
         return stamp
     safe = re.sub(r"[^a-zA-Z0-9._-]+", "-", label.strip()).strip("-")[:48]
@@ -78,15 +82,19 @@ def _workflow_signature(wf: dict) -> str:
 
 
 def normalize_discovered(data: dict) -> dict:
-    """Return a JSON-serializable copy of one workspace's discover() output."""
+    """Return a JSON-serializable, read-only view of discover() output.
+
+    Callers serialize this immediately. Reusing the discovered collections avoids
+    duplicating tens of megabytes in memory during a full rebuild.
+    """
     out = {
         "slug": data["slug"],
         "workspaceName": data.get("workspaceName", data["slug"]),
-        "forms": deepcopy(data["forms"]),
-        "fields": deepcopy(data["fields"]),
-        "relationships": deepcopy(data["relationships"]),
-        "refPulls": deepcopy(data["refPulls"]),
-        "workflows": deepcopy(data["workflows"]),
+        "forms": data["forms"],
+        "fields": data["fields"],
+        "relationships": data["relationships"],
+        "refPulls": data["refPulls"],
+        "workflows": data["workflows"],
         "featured": list(data.get("featured") or []),
     }
     return out
@@ -118,39 +126,82 @@ def _load_manifest() -> list[dict]:
     path = SNAPSHOTS_DIR / MANIFEST_NAME
     if not path.exists():
         return []
-    return json.loads(path.read_text(encoding="utf-8"))
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _save_manifest(entries: list[dict]) -> None:
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    (SNAPSHOTS_DIR / MANIFEST_NAME).write_text(
-        json.dumps(entries, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    _atomic_write(SNAPSHOTS_DIR / MANIFEST_NAME,
+                  json.dumps(entries, indent=2, ensure_ascii=False) + "\n")
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Replace a text file atomically from a temporary file in the same directory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+@contextmanager
+def _snapshot_lock():
+    """Cross-platform advisory lock for snapshot/manifest mutations."""
+    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = SNAPSHOTS_DIR / ".snapshot.lock"
+    with lock_path.open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def save_snapshot(discovered_all: dict[str, dict], label: str | None = None) -> dict:
     """Persist a snapshot file and update the manifest. Returns snapshot metadata."""
     snap = build_snapshot(discovered_all, label=label)
-    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = SNAPSHOTS_DIR / f"{snap['id']}.json"
-    path.write_text(json.dumps(snap, indent=2, ensure_ascii=False) + "\n",
-                    encoding="utf-8")
+    with _snapshot_lock():
+        path = SNAPSHOTS_DIR / f"{snap['id']}.json"
+        if path.exists():
+            raise FileExistsError(f"snapshot id collision: {snap['id']}")
+        _atomic_write(path, json.dumps(snap, indent=2, ensure_ascii=False) + "\n")
 
-    manifest = _load_manifest()
-    entry = {
-        "id": snap["id"],
-        "label": snap["label"],
-        "created": snap["created"],
-        "file": path.name,
-        "workspaces": sorted(snap["workspaces"].keys()),
-        "totals": {
-            "forms": sum(c["forms"] for c in snap["counts"].values()),
-            "workflows": sum(c["workflows"] for c in snap["counts"].values()),
-        },
-    }
-    manifest.append(entry)
-    _save_manifest(manifest)
+        manifest = _load_manifest()
+        entry = {
+            "id": snap["id"],
+            "label": snap["label"],
+            "created": snap["created"],
+            "file": path.name,
+            "workspaces": sorted(snap["workspaces"].keys()),
+            "totals": {
+                "forms": sum(c["forms"] for c in snap["counts"].values()),
+                "workflows": sum(c["workflows"] for c in snap["counts"].values()),
+            },
+        }
+        manifest.append(entry)
+        _save_manifest(manifest)
     return entry
 
 
@@ -169,18 +220,21 @@ def prune_snapshots(keep: int = DEFAULT_KEEP) -> tuple[list[dict], list[dict]]:
     """
     if keep < 1:
         raise ValueError("keep must be >= 1")
-    manifest = _load_manifest()  # oldest -> newest
-    unlabeled = [e for e in manifest if not e.get("label")]
-    doomed = unlabeled[:-keep] if len(unlabeled) > keep else []
-    if not doomed:
-        return [], manifest
-    doomed_ids = {e["id"] for e in doomed}
-    kept = [e for e in manifest if e["id"] not in doomed_ids]
-    for e in doomed:
-        path = SNAPSHOTS_DIR / e["file"]
-        if path.exists():
-            path.unlink()
-    _save_manifest(kept)
+    with _snapshot_lock():
+        manifest = _load_manifest()  # oldest -> newest
+        unlabeled = [e for e in manifest if not e.get("label")]
+        doomed = unlabeled[:-keep] if len(unlabeled) > keep else []
+        if not doomed:
+            return [], manifest
+        doomed_ids = {e["id"] for e in doomed}
+        kept = [e for e in manifest if e["id"] not in doomed_ids]
+        # Commit the new index first. A crash can leave harmless orphan files,
+        # but never a manifest entry pointing at a deleted snapshot.
+        _save_manifest(kept)
+        for e in doomed:
+            path = SNAPSHOTS_DIR / e["file"]
+            if path.exists():
+                path.unlink()
     return doomed, kept
 
 
@@ -216,7 +270,8 @@ def resolve_snapshot_ref(ref: str) -> Path:
 
 def load_snapshot(ref: str) -> dict:
     path = resolve_snapshot_ref(ref)
-    return json.loads(path.read_text(encoding="utf-8"))
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _compare_field(old: dict, new: dict) -> list[dict]:

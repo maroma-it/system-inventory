@@ -3,6 +3,6 @@
     "callsign": "INSPECT-01",
     "criticality": "High",
     "businessProcess": "INSPECT",
-    "owner": "adam (aaguila@maromaes.com)"
+    "owner": "adam (workflow-recipient@example.com)"
   }
 }

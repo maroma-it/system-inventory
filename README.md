@@ -48,7 +48,7 @@ The project answers questions about workflow automations and form architecture t
 - Normalized inventory and dependency graph generation.
 - Field-level "Where Is This Used?" inspection, cross-form and intra-form.
 - Multi-workspace aggregation and cross-workspace pattern detection.
-- Read-only consumption interfaces: Excel inventory, browser-based explorer, zero-knowledge launcher.
+- Consumption interfaces: Excel inventory, browser-based explorer, and a guided refresh launcher.
 
 **Not in scope:**
 
@@ -61,7 +61,7 @@ The project answers questions about workflow automations and form architecture t
 Per workspace:
 
 - **`output/<slug>/workflow_master_inventory.xlsx`** — normalized spreadsheet inventory. One row per form, field, relationship, workflow, action, and field-usage event. Field rows also carry validators, computed formulas, filter/visibility conditions, default values, and the same-form fields each references. Filterable for impact analysis ("what breaks if I rename field X").
-- **`output/<slug>/workspace_explorer.html`** — interactive graph. Open in any browser. Zoom, pan, click forms to inspect fields, click the workflow node to see what it touches. Field detail answers "where is this used?" across forms and within the form. The workflow panel also warns when it writes a field another workflow writes too, with a link to the other workflow. Light/dark toggle in the toolbar.
+- **`output/<slug>/workspace_explorer.html`** — interactive graph. Open in any browser, including offline. Zoom, pan, click forms to inspect fields, or use **Browse nodes** for keyboard navigation. Field detail answers "where is this used?" across forms and within the form. The workflow panel also warns when it writes a field another workflow writes too, with a link to the other workflow. Light/dark toggle in the toolbar; narrow screens use a mobile detail sheet.
 
 Across all workspaces:
 
@@ -69,14 +69,14 @@ Across all workspaces:
 - **`output/global/global-explorer.html`** — single graph with each workspace as a cluster and duplicate form names linked across clusters. Form nodes link back into the per-workspace explorer.
 - **`docs/field-index.json`** — machine-readable field index published to GitHub Pages on every rebuild. Maps `"<slug>/<FormDisplayName>"` to an array of `{"name", "label", "type"}` for every field on that form, across all workspaces. This is a stable integration interface — its structure is a contract for external tools (currently a PDF field-mapper). Do not change key format or field names without migrating consumers.
 
-## Quick start for read-only users
+## Quick start with the guided refresh launcher
 
 If you just want to see the latest inventory and have never touched Python or git, use the launcher for your platform — no terminal required.
 
 - **Windows:** double-click **`start.bat`**
 - **macOS / Linux:** double-click **`refresh-and-open.command`** (first time on macOS, right-click → **Open** to clear the security prompt)
 
-The launcher:
+The launcher updates the working copy and rebuilds generated files. It:
 
 1. Checks out `main` and pulls the latest data and code (`git checkout main` + `git pull`) if git is available — and continues with the local copy if not.
 2. Rebuilds the Excel and HTML artifacts.
@@ -122,8 +122,8 @@ If something is missing it prints plain-English instructions instead of failing 
 │   ├── explorer_template.html   (per-workspace HTML template)
 │   ├── global_template.html     (global HTML template)
 │   └── regenerate.py            (rebuild orchestrator)
-├── start.bat                    (Windows read-only launcher)
-├── refresh-and-open.command     (macOS/Linux read-only launcher)
+├── start.bat                    (Windows guided refresh launcher)
+├── refresh-and-open.command     (macOS/Linux guided refresh launcher)
 ├── requirements.txt
 └── README.md
 ```

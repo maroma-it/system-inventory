@@ -25,7 +25,7 @@ publishes the current views. Excel artifacts stay in output/ and are never copie
 to docs/. Full rebuilds auto-save a snapshot after publish_docs(), then auto-prune
 old unlabeled snapshots down to the newest 5 (labeled snapshots are always kept).
 """
-import sys, argparse, json, re
+import sys, argparse, json, re, shutil
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -43,6 +43,7 @@ DOCS_DIR = OUTPUT_DIR.parent / "docs"
 WS_EXPLORER = "workspace_explorer.html"      # per-workspace source filename in output/
 GLOBAL_EXPLORER = "global-explorer.html"     # global source filename in output/
 BRIEF_TEMPLATE = (Path(__file__).resolve().parent / "brief_template.html").read_text(encoding="utf-8")
+VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
 
 
 _WINDOWS_ILLEGAL_CHARS = re.compile(r'[<>:"/\\|?*]')
@@ -56,6 +57,22 @@ def _brief_filename(form_name):
     on disk while linking to it with encodeURIComponent double-encodes, since
     the browser decodes the href before doing the filesystem lookup."""
     return _WINDOWS_ILLEGAL_CHARS.sub("", form_name) + ".html"
+
+
+def _brief_href(form_name):
+    """URL-safe path component for a brief whose disk filename stays readable."""
+    return quote(_brief_filename(form_name), safe="")
+
+
+def publish_vendor_assets():
+    """Copy pinned graph runtimes beside local and GitHub Pages explorers."""
+    if not VENDOR_DIR.exists():
+        raise FileNotFoundError(f"Missing vendored browser assets: {VENDOR_DIR}")
+    for root in (OUTPUT_DIR, DOCS_DIR):
+        dest = root / "assets"
+        dest.mkdir(parents=True, exist_ok=True)
+        for source in VENDOR_DIR.glob("*.js"):
+            shutil.copy2(source, dest / source.name)
 
 
 def rebuild_workspace(slug):
@@ -127,9 +144,13 @@ def _write_landing(views, stamp, featured_links=None):
         # Any workspace with briefs gets an "All form briefs" chip; featured
         # forms (if any) come first as their own quick links.
         if slug in featured_links:
+            shown = chips[:8]
             links = "".join(
                 f'<a class="chip" href="{_html_escape(bhref)}">{_html_escape(fname)}</a>'
-                for fname, bhref in chips)
+                for fname, bhref in shown)
+            if len(chips) > len(shown):
+                links += (f'<a class="chip all" href="{_html_escape(slug + "/forms/index.html")}">'
+                          f'+{len(chips) - len(shown)} more</a>')
             links += (f'<a class="chip all" href="{_html_escape(slug + "/forms/index.html")}">'
                       f'All form briefs &rarr;</a>')
             lbl = "Featured:" if chips else "Briefs:"
@@ -169,7 +190,7 @@ def _write_landing(views, stamp, featured_links=None):
   .chips{{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}}
   .chips-lbl{{color:var(--muted);font-size:11px}}
   a.chip{{font-size:11px;background:#4a3a12;color:#fcd34d;border-radius:4px;
-         padding:2px 9px;text-decoration:none}}
+         padding:2px 9px;text-decoration:none;max-width:100%;overflow-wrap:anywhere}}
   a.chip:hover{{background:#5c4715}}
   a.chip.all{{background:var(--bg3);color:var(--accent)}}
   a.chip.all:hover{{background:#2e3340}}
@@ -399,17 +420,17 @@ def _render_brief(slug, ws_name, form, nar_form, data, featured, stories):
     field_browser = (
         f'  <h2>All fields ({len(fields)})</h2>'
         f'  <div class="field-tools">'
-        f'<input class="field-search" placeholder="filter fields..." oninput="__briefFilterInput(this.value)">'
-        f'<select class="field-mode-filter" onchange="__briefModeFilter(this.value)">'
+        f'<input class="field-search" aria-label="Filter fields" placeholder="filter fields..." oninput="__briefFilterInput(this.value)">'
+        f'<select class="field-mode-filter" aria-label="Filter fields by configuration type" onchange="__briefModeFilter(this.value)">'
         f'<option value="">All configuration</option>'
         f'<option value="Advanced">Advanced (code) only</option>'
         f'<option value="Conditional">Conditional (rule builder) only</option>'
         f'</select></div>'
-        f'  <div class="field-controls"><span class="exp-count" id="brief-exp-count">0 expanded</span>'
+        f'  <div class="field-controls"><span class="exp-count" id="brief-exp-count" role="status" aria-live="polite">0 expanded</span>'
         f'<span class="spacer"></span>'
         f'<button class="mini-btn" onclick="__briefCollapseAll()">Collapse all</button>'
         f'<button class="mini-btn" onclick="__briefExpandAll()">Expand all</button></div>'
-        f'  <div class="field-list" id="brief-field-list"></div>'
+        f'  <div class="field-list" id="brief-field-list" role="list"></div>'
     )
 
     body = [
@@ -432,7 +453,7 @@ def _render_brief(slug, ws_name, form, nar_form, data, featured, stories):
         f'  <h2>What changes what</h2>{changes}',
         version_html,
         field_browser,
-        f'  <div class="foot">Generated by regenerate.py &middot; not hand-edited</div>',
+        f'  <div class="foot">Built by regenerate.py &middot; not hand-edited</div>',
     ]
     field_data_json = json.dumps(field_browser_data, separators=(",", ":")).replace("</", "<\\/")
     return (BRIEF_TEMPLATE
@@ -459,7 +480,7 @@ def _render_brief_index(slug, ws_name, data, featured):
             continue
         forms = sorted(forms, key=lambda f: (f["name"] not in featured, f["name"].lower()))
         items = "".join(
-            f'<li><a href="{esc(_brief_filename(f["name"]))}">{esc(f["name"])}</a>'
+            f'<li><a href="{esc(_brief_href(f["name"]))}">{esc(f["name"])}</a>'
             + ('<span class="badge featured">Featured</span>' if f["name"] in featured else "")
             + (f' <span class="when">{esc(f.get("description") or "")}</span>'
                if f.get("description") else "")
@@ -471,7 +492,7 @@ def _render_brief_index(slug, ws_name, data, featured):
         f'  <h1>{esc(ws_name)} &mdash; form briefs</h1>',
         f'  <div class="ws">One printable plain-English page per form</div>',
         "".join(sections),
-        f'  <div class="foot">Generated by regenerate.py &middot; not hand-edited</div>',
+        f'  <div class="foot">Built by regenerate.py &middot; not hand-edited</div>',
     ]
     return (BRIEF_TEMPLATE
             .replace("__TITLE__", esc(ws_name) + " — form briefs")
@@ -504,6 +525,7 @@ def emit_form_briefs():
             name = form["name"]
             html = _render_brief(slug, ws_name, form, nar[name], data,
                                  name in featured, stories)
+            html = narrate.redact_public_text(html)
             fn = _brief_filename(name)
             (out_dir / fn).write_text(html, encoding="utf-8")
             # docs/'s explorer copy is renamed to explorer.html (see publish_docs());
@@ -514,7 +536,7 @@ def emit_form_briefs():
         idx = _render_brief_index(slug, ws_name, data, featured)
         (out_dir / "index.html").write_text(idx, encoding="utf-8")
         (docs_dir / "index.html").write_text(idx.replace(WS_EXPLORER, "explorer.html"), encoding="utf-8")
-        featured_links[slug] = [(n, f"{slug}/forms/{_brief_filename(n)}")
+        featured_links[slug] = [(n, f"{slug}/forms/{_brief_href(n)}")
                                 for n in data.get("featured", [])]
     print(f"  form briefs -> {total} page(s) + {len(discovered)} index page(s) (output/ + docs/)")
     return featured_links
@@ -720,6 +742,7 @@ def publish_docs():
     consistent regardless of which build path ran. Excel files are not copied.
     """
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    publish_vendor_assets()
     # Serve files verbatim — no Jekyll build step on the Pages side.
     (DOCS_DIR / ".nojekyll").write_text("", encoding="utf-8")
     views = []
@@ -831,6 +854,7 @@ def main():
         return
 
     if args.global_only:
+        publish_vendor_assets()
         print("[global]")
         build_global.build()
         print("\n[docs] publish")
@@ -839,6 +863,7 @@ def main():
         return
 
     if args.workspace:
+        publish_vendor_assets()
         if args.workspace not in slugs:
             print(f"Unknown workspace '{args.workspace}'. Available: {', '.join(slugs)}")
             sys.exit(1)
@@ -850,6 +875,7 @@ def main():
         return
 
     stats = {}
+    publish_vendor_assets()
     for slug in slugs:
         stats[slug] = rebuild_workspace(slug)
 

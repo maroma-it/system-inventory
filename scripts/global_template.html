@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cross-Workspace Map</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'self'; connect-src 'none'">
+<script src="../assets/cytoscape.min.js"></script>
 <style>
   :root {
     --bg:#0f1115; --bg2:#1a1d24; --bg3:#252932; --border:#2e3340;
@@ -55,6 +56,7 @@
   .row{padding:8px 10px;border-radius:5px;font-size:12px;margin-bottom:6px;cursor:pointer;
        background:var(--bg3);border:1px solid var(--border)}
   .row:hover{border-color:var(--accent)}
+  .row.static{cursor:default}.row.static:hover{border-color:var(--border)}
   .row .t{font-weight:600;color:var(--text)}
   .row .s{color:var(--muted);font-size:11px;margin-top:2px;font-family:monospace}
   .pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin:2px 4px 0 0;
@@ -70,20 +72,51 @@
   .close-btn{float:right;background:transparent;border:0;color:var(--muted);cursor:pointer;
              font-size:18px;line-height:1}
   .close-btn:hover{color:var(--text)}
+  .match-count{color:var(--accent);font-size:11px;font-family:monospace}
+  .node-nav-wrap{position:relative}.node-nav-menu{display:none;position:absolute;top:calc(100% + 6px);
+    right:0;width:320px;max-width:calc(100vw - 24px);max-height:60vh;overflow:hidden;
+    background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;z-index:140;
+    box-shadow:0 4px 20px rgba(0,0,0,.45)}
+  .node-nav-menu.open{display:flex;flex-direction:column;gap:8px}.node-nav-menu input{width:100%}
+  .node-nav-list{overflow:auto;display:flex;flex-direction:column;gap:4px}
+  .node-nav-list button{text-align:left;width:100%;white-space:normal}
+  .node-nav-list button small{display:block;color:var(--muted);margin-top:2px}
+  .panel-toggle{display:none}
+  @media(max-width:700px){
+    body{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto minmax(260px,1fr);
+      grid-template-areas:"toolbar" "graph"}
+    .toolbar{padding:8px;gap:8px;max-height:42vh;overflow-y:auto;min-width:0;width:100%}
+    .toolbar h1{width:100%;min-width:0}.toolbar .spacer{display:none}
+    .toolbar input{width:min(100%,260px)}.toolbar .stats{width:100%}.resizer{display:none}
+    .legend{max-width:calc(100vw - 24px)}
+    .panel{position:fixed;z-index:180;left:0;right:0;top:42%;bottom:0;border-left:0;
+      border-top:2px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.45)}
+    body.panel-collapsed .panel{display:none}
+    .panel-toggle{display:block;position:fixed;right:12px;bottom:12px;z-index:210;
+      background:var(--accent);color:#0f1115;border:0;border-radius:18px;padding:8px 13px;font-weight:600}
+  }
 </style>
 </head>
 <body>
 
 <div class="toolbar">
   <h1>Cross-Workspace Map<span class="sub">forms only</span></h1>
-  <input id="search" placeholder="Search forms / workspaces..." autocomplete="off">
+  <input id="search" aria-label="Search forms and workspaces" placeholder="Search forms / workspaces..." autocomplete="off">
+  <span class="match-count" id="match-count" role="status" aria-live="polite"></span>
   <button id="fit">Fit</button>
   <button id="reset">Reset</button>
+  <div class="node-nav-wrap">
+    <button id="node-nav-btn" aria-expanded="false" aria-controls="node-nav-menu">Browse nodes</button>
+    <div class="node-nav-menu" id="node-nav-menu">
+      <input id="node-nav-search" aria-label="Filter graph nodes" placeholder="Filter graph nodes..." autocomplete="off">
+      <div class="node-nav-list" id="node-nav-list" role="tree" aria-label="Workspaces and forms"></div>
+    </div>
+  </div>
   <div class="spacer"></div>
   <div class="stats" id="stats"></div>
 </div>
 
-<div id="cy"></div>
+<div id="cy" aria-hidden="true"></div>
 
 <div class="legend">
   <div class="item"><div class="dot" style="background:var(--hub)"></div>Hub</div>
@@ -91,11 +124,16 @@
   <div class="item"><div class="dot" style="background:var(--lookup)"></div>Lookup</div>
 </div>
 
-<div class="resizer" id="resizer" title="Drag to resize"></div>
+<div class="resizer" id="resizer" role="separator" aria-label="Resize detail panel" aria-orientation="vertical" tabindex="0" title="Drag or use arrow keys to resize"></div>
 
 <div class="panel" id="panel"></div>
+<button class="panel-toggle" id="panel-toggle" aria-controls="panel" aria-expanded="true">Details</button>
 
 <script>
+if (typeof cytoscape === 'undefined') {
+  document.getElementById('panel').textContent = 'The graph runtime is missing. Re-run the rebuild to restore assets.';
+  throw new Error('Cytoscape runtime unavailable');
+}
 const DATA = __DATA__;
 // Cytoscape's canvas renderer can't resolve CSS var() — resolve role colors to hex.
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
@@ -208,12 +246,27 @@ const cy = cytoscape({
                                        'width':3, 'opacity':1}},
   ],
   layout: {name:'preset', fit:true, padding:50},
-  wheelSensitivity: 0.2, minZoom:0.15, maxZoom:3,
+  minZoom:0.15, maxZoom:3,
 });
 
 cy.ready(() => cy.fit(undefined, 50));
 
 const panel = document.getElementById('panel');
+const panelToggle = document.getElementById('panel-toggle');
+const nodeNavBtn = document.getElementById('node-nav-btn');
+const nodeNavMenu = document.getElementById('node-nav-menu');
+const nodeNavSearch = document.getElementById('node-nav-search');
+const nodeNavList = document.getElementById('node-nav-list');
+const matchCount = document.getElementById('match-count');
+const isNarrow = () => window.matchMedia('(max-width: 700px)').matches;
+
+function setPanelOpen(open){
+  document.body.classList.toggle('panel-collapsed', !open);
+  panelToggle.setAttribute('aria-expanded', String(open));
+  panelToggle.textContent = open ? 'Hide details' : 'Show details';
+  requestAnimationFrame(() => { cy.resize(); });
+}
+panelToggle.addEventListener('click', () => setPanelOpen(document.body.classList.contains('panel-collapsed')));
 
 function clearHighlights(){ cy.elements().removeClass('dim highlight'); }
 
@@ -251,7 +304,7 @@ function renderOverview(){
 
     <div class="section"><h3>Workflow reuse (${reuse.length} patterns)</h3>
       ${reuse.length ? reuse.map(r => `
-        <div class="row" style="cursor:default">
+        <div class="row static">
           <div class="t">${escapeHtml(r.pattern)}
             <span class="pill drift-${escapeHtml(r.drift)}">${escapeHtml(r.drift)}</span>${
             r.literalTwin ? `<span class="pill twin" title="Exact-hash twin group (identical logic, possibly different trigger forms)">${escapeHtml(r.literalTwin)}</span>` : ''}</div>
@@ -262,13 +315,14 @@ function renderOverview(){
 
     <div class="section"><h3>Duplicate flows (${flows.length})</h3>
       ${flows.length ? flows.map(d => `
-        <div class="row">
+        <div class="row static">
           <div class="t">${escapeHtml(d.signature)}</div>
           <div class="s">${d.members.map(m => escapeHtml(m.slug+'/'+m.callsign)).join(' · ')}</div>
         </div>`).join('')
         : '<div class="empty-state">No workflows share a trigger/target signature yet.</div>'}
     </div>
   `;
+  if (isNarrow()) setPanelOpen(false); else setPanelOpen(true);
 }
 
 function highlightCollision(i){
@@ -292,6 +346,7 @@ function renderForm(node){
       <div class="meta" style="margin-top:8px">Rename impact crosses ${otherSlugs.length+1} workspaces.</div>
       </div>` : '<div class="section"><div class="empty-state">Form name is unique across workspaces.</div></div>'}
   `;
+  setPanelOpen(true);
 }
 
 cy.on('tap', 'node', evt => {
@@ -315,19 +370,71 @@ document.getElementById('fit').addEventListener('click', () => cy.fit(undefined,
 document.getElementById('reset').addEventListener('click', () => {
   cy.nodes('[kind = "form"]').forEach(n => { const p = POS[n.id()]; if (p) n.position(p); });
   cy.fit(undefined, 50);
+  document.getElementById('search').value = '';
+  matchCount.textContent = '';
   renderOverview();
 });
-document.getElementById('search').addEventListener('input', e => {
-  const q = e.target.value.toLowerCase().trim();
-  if (!q) { clearHighlights(); return; }
+function runSearch(value){
+  const q = value.toLowerCase().trim();
+  if (!q) { clearHighlights(); matchCount.textContent = ''; return; }
   clearHighlights();
   cy.elements().addClass('dim');
+  const hits = cy.collection();
   cy.nodes().forEach(n => {
     if ((n.data('label')||'').toLowerCase().includes(q) || (n.data('slug')||'').toLowerCase().includes(q)) {
+      hits.merge(n);
       n.removeClass('dim').addClass('highlight');
       n.connectedEdges().forEach(ed => { ed.removeClass('dim'); ed.connectedNodes().removeClass('dim'); });
     }
   });
+  matchCount.textContent = `${hits.length} match${hits.length === 1 ? '' : 'es'}`;
+  if (hits.length) cy.fit(hits, 80);
+}
+let searchTimer;
+document.getElementById('search').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(e.target.value), 120);
+});
+
+const navNodes = cy.nodes().map(n => ({
+  id:n.id(), label:n.data('label') || n.id(),
+  meta:n.data('kind') === 'workspace' ? 'Workspace' : `${n.data('slug')} · ${n.data('role') || 'Form'}`
+})).sort((a,b) => a.label.localeCompare(b.label));
+function renderNodeNav(query=''){
+  const q = query.toLowerCase().trim();
+  const visible = navNodes.filter(n => !q || `${n.label} ${n.meta}`.toLowerCase().includes(q));
+  nodeNavList.innerHTML = visible.map(n => `<button type="button" role="treeitem" data-node-id="${escapeHtml(n.id)}">
+    ${escapeHtml(n.label)}<small>${escapeHtml(n.meta)}</small></button>`).join('') ||
+    '<div class="empty-state">No matching nodes.</div>';
+  nodeNavList.querySelectorAll('button[data-node-id]').forEach(button => button.addEventListener('click', () => {
+    const n = cy.$id(button.dataset.nodeId);
+    if (!n.length) return;
+    n.select(); cy.center(n);
+    if (n.data('kind') === 'workspace') {
+      const ids = n.children().map(c => c.id()); highlightIds(ids);
+    } else {
+      clearHighlights(); cy.elements().addClass('dim');
+      n.removeClass('dim').addClass('highlight');
+      n.connectedEdges().forEach(e => { e.removeClass('dim'); e.connectedNodes().removeClass('dim'); });
+      renderForm(n);
+    }
+    nodeNavMenu.classList.remove('open');
+    nodeNavBtn.setAttribute('aria-expanded','false');
+    nodeNavBtn.focus();
+  }));
+}
+renderNodeNav();
+nodeNavBtn.addEventListener('click', () => {
+  const open = !nodeNavMenu.classList.contains('open');
+  nodeNavMenu.classList.toggle('open', open);
+  nodeNavBtn.setAttribute('aria-expanded', String(open));
+  if (open) nodeNavSearch.focus();
+});
+nodeNavSearch.addEventListener('input', e => renderNodeNav(e.target.value));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && nodeNavMenu.classList.contains('open')) {
+    nodeNavMenu.classList.remove('open'); nodeNavBtn.setAttribute('aria-expanded','false'); nodeNavBtn.focus();
+  }
 });
 
 function escapeHtml(s){return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -354,7 +461,12 @@ window.cy = cy;
   let targetWidth = 360;
   function setWidth(px){
     targetWidth = clamp(px);
+    if (isNarrow()) {
+      document.body.style.gridTemplateColumns = '';
+      return;
+    }
     document.body.style.gridTemplateColumns = 'minmax(0, 1fr) 6px ' + targetWidth + 'px';
+    resizer.setAttribute('aria-valuenow', String(Math.round(targetWidth)));
   }
   // Tracking-prevention browsers (Edge/Chrome on file:// pages) can block
   // localStorage entirely and throw — if that happens on this first call, it
@@ -365,6 +477,7 @@ window.cy = cy;
 
   let dragging = false;
   resizer.addEventListener('pointerdown', e => {
+    if (isNarrow()) return;
     dragging = true;
     resizer.classList.add('active');
     document.body.classList.add('resizing');
@@ -384,6 +497,13 @@ window.cy = cy;
   }
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
+  resizer.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    setWidth(targetWidth + (e.key === 'ArrowLeft' ? 20 : -20));
+    try { localStorage.setItem(STORAGE_KEY, Math.round(targetWidth)); } catch(e) {}
+    cy.resize();
+  });
   window.addEventListener('resize', () => {
     setWidth(targetWidth);
     if (window.cy) window.cy.resize();

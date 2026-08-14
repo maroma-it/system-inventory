@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Refresh the SoCal WHP inventory and open it in the default browser.
+# Refresh the system inventory and open it in the default browser.
 # Designed to be double-clicked by someone who has never used a terminal.
 cd "$(dirname "$0")" || exit 1
 
 pause() { echo; read -n 1 -s -r -p "Press any key to close..."; echo; }
 
 echo "============================================"
-echo "  SoCal WHP Inventory  -  Refresh & Open"
+echo "  System Inventory  -  Refresh & Open"
 echo "============================================"
 echo
 
@@ -29,8 +29,13 @@ echo "[OK] Python found ($PY)."
 
 # --- Sanity check: git on PATH (optional) ---
 if command -v git >/dev/null 2>&1; then
-    echo "[OK] Git found - fetching the latest data and code..."
-    if ! git pull; then
+    echo "[OK] Git found - checking out main and fetching the latest data and code..."
+    if ! git checkout main; then
+        echo
+        echo "[WARN] \"git checkout main\" did not finish cleanly (local changes or a conflict)."
+        echo "       Continuing on the current branch."
+    fi
+    if ! git pull --ff-only; then
         echo
         echo "[WARN] \"git pull\" did not finish cleanly (no network, no remote, or a conflict)."
         echo "       Continuing with the local copy you already have."
@@ -93,18 +98,28 @@ for d in output/*/; do
     fi
 done
 echo
-read -r -p "Enter a number, G for the global view, or just press Enter for global: " CHOICE
+LASTV="G"
+[ -f "output/last-view.txt" ] && IFS= read -r LASTV < "output/last-view.txt"
+read -r -p "Enter a number, G, or a workspace slug; Enter reopens [$LASTV]: " CHOICE
+[ -z "$CHOICE" ] && CHOICE="$LASTV"
 
 TARGET=""
-if [ -z "$CHOICE" ] || [ "$CHOICE" = "G" ] || [ "$CHOICE" = "g" ]; then
+PICKED=""
+if [ "$CHOICE" = "G" ] || [ "$CHOICE" = "g" ]; then
     [ -f "$GLOBAL" ] && TARGET="$GLOBAL"
-elif [ -n "${SLUGS[$CHOICE]:-}" ]; then
+    PICKED="G"
+elif [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "$i" ]; then
     TARGET="output/${SLUGS[$CHOICE]}/workspace_explorer.html"
+    PICKED="${SLUGS[$CHOICE]}"
+elif [ -f "output/$CHOICE/workspace_explorer.html" ]; then
+    TARGET="output/$CHOICE/workspace_explorer.html"
+    PICKED="$CHOICE"
 fi
 if [ -z "$TARGET" ]; then
     if [ -f "$GLOBAL" ]; then TARGET="$GLOBAL"
     elif [ -n "${SLUGS[1]:-}" ]; then TARGET="output/${SLUGS[1]}/workspace_explorer.html"; fi
 fi
+[ -n "$PICKED" ] && printf '%s\n' "$PICKED" > "output/last-view.txt"
 if [ -z "$TARGET" ] || [ ! -f "$TARGET" ]; then
     echo "[ERROR] Could not find a view to open. Did the rebuild produce any output?"
     pause

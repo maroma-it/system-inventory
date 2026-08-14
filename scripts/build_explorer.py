@@ -2,7 +2,7 @@
 build_explorer.py — generate a workspace's interactive HTML map.
 Outputs to output/<workspace-slug>/workspace_explorer.html.
 """
-import sys, json
+import sys, json, html as html_lib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,15 +61,16 @@ def build(ws):
             "fieldUsage": [{"form": u["form"], "field": u["field"],
                             "direction": u["direction"], "context": u["context"]}
                            for u in w["fieldUsage"]],
-        } for w in data["workflows"] if w["trigger"]]
+        } for w in data["workflows"]]
     }
 
     data_json = json.dumps(viz_data, separators=(",", ":")).replace("</", "<\\/")
-    preset_json = json.dumps(ws.explorer_layout(), separators=(",", ":"))
+    data_json = narrate.redact_public_text(data_json)
+    preset_json = json.dumps(ws.explorer_layout(), separators=(",", ":")).replace("</", "<\\/")
     html = (TEMPLATE
             .replace("__DATA__", data_json)
             .replace("__PRESET__", preset_json)
-            .replace("__TITLE__", data["workspaceName"]))
+            .replace("__TITLE__", html_lib.escape(data["workspaceName"], quote=True)))
 
     out_dir = OUTPUT_DIR / ws.slug
     out_dir.mkdir(parents=True, exist_ok=True)

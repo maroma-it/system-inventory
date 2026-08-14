@@ -228,9 +228,15 @@ def _workflows_on(form_name, workflows):
 # ── the workflow story ("when X happens, it does Y") ────────────────
 
 _NOTIF_RE = re.compile(r"^To:\s*(.+?)\s*·\s*Subject:\s*(.+)$", re.S)
+_PUBLIC_EMAIL_RE = re.compile(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w.-])")
 # WFEngine templates double-brace their tokens ({{ESAKey}}); Legacy uses single
 # ({ESAKey}). Match either and replace the whole token, brace count included.
 _TOKEN_RE = re.compile(r"\{{1,2}(\w+)\}{1,2}")
+
+
+def redact_public_text(value):
+    """Remove literal recipient addresses from user-facing generated artifacts."""
+    return _PUBLIC_EMAIL_RE.sub("[configured recipient]", str(value))
 
 def _debrace(template_text, fields):
     """'... for {ESAKey}' -> '... for {the record's ESA Key}' — template tokens
@@ -251,8 +257,11 @@ def _action_sentence(action, workflow, trigger_fields):
     if "notification" in atype or "sendemail" in atype:
         m = _NOTIF_RE.match(action.get("matchOn") or "")
         if m:
-            to, subject = m.group(1).strip(), _debrace(m.group(2).strip(), trigger_fields)
-            return f"Sends an email to {to} — subject “{subject}”."
+            subject = _debrace(m.group(2).strip(), trigger_fields)
+            # Recipient literals can contain personal addresses from exported
+            # workflow configuration. The public documentation needs the action
+            # and subject, not the identities behind the routing rule.
+            return f"Sends an email to configured recipients — subject “{subject}”."
         return "Sends a notification."
 
     tgt = action.get("targetForm") or ""

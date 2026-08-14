@@ -33,11 +33,19 @@ if the design detail is ever needed.)
   count-objects -vH` size-pack grows materially; GitHub's >50 MB per-file push
   warning on new snapshots is about raw file size and is expected/harmless (hard
   limit is 100 MB).
-- `regenerate.py` discovers every workspace up to 4× per full rebuild (per-workspace
-  builds + global + field index + briefs construct fresh `Workspace` instances). Share
-  one `discover_all()` result across the run to cut rebuild time roughly in half.
-
 ## Done
+
+**UI, security, and reliability hardening (2026-08-13).** Explorers now run fully
+offline from vendored, pinned graph libraries; use responsive mobile detail sheets;
+provide keyboard-accessible DOM node navigation; preserve workflow-type colors through
+theme changes; synchronize reset/search/filter state; report clipboard failures; and
+cap/index bulk field expansion. Public pages redact notification recipients and safely
+encode source-derived HTML, inline arguments, preset data, titles, and brief links.
+Launchers now validate selection input and align branch behavior. Parser failures warn
+instead of disappearing or aborting discovery. Snapshot IDs are collision-resistant and
+snapshot/manifest updates are locked and atomic. Discovery results are cached across the
+full rebuild, removing repeated parsing. Added repository-wide sensitive-data scanning,
+responsive/accessibility regression contracts, and exact dependency pins.
 
 **FieldAssignments generator (2026-07-16).** New `scripts/expand_field_assignments.py`, sibling to
 `expand_subform_ops.py`, mass-generates a WFEngine workflow's top-level `FieldAssignments` parameter
@@ -155,7 +163,7 @@ gitignored). start.bat README.txt/error text rewritten.
 **Plain-English briefs (plans/02).** narrate.py rewritten for the program staffer:
 platform Description leads each brief, workflow story cards ("Runs when a 310 -
 Enrollment Intake record is updated, and only if Enrollment Status is 'Pending
-Review'. → Sends an email to operations@maromaes.com — subject …"), labels over API
+Review'. → Sends an email to workflow-recipient@example.com — subject …"), labels over API
 names, workflow names over callsigns, count_phrase (no "(s)"), plain conditions
 (`condition_to_plain`), humanized schedules ("weekly on Monday"), de-braced template
 tokens ("{the record's ESA Key}"). Fixed `_expr_to_text` empty-operand joins (the
@@ -184,10 +192,9 @@ need (socal-whp is 97 forms / 54 workflows).
 
 Workflow trigger/action edges clickable. The edge tap handler's `wf-edge` branch resolves
 the workflow from the edge's `WF:<callsign>` endpoint, highlights it, and renders the
-workflow-detail panel; action edges then call `scrollToWfAction(targetForm)` to scroll the
-matching action card into view and flash its border. Trigger edges open the panel without
-scrolling. (Known limitation: scroll matches by target form, not action index — tracked
-under Candidates.)
+workflow-detail panel; action edges then call `scrollToWfAction(targetForm, actionIdx)` to
+scroll the exact action card into view and flash its border. Trigger edges open the panel
+without scrolling.
 
 Export button copies form fields as markdown table to clipboard. Columns: API Name,
 Label, Type, Required, WF (R/W/C). Respects active filter and sort. All 5 workspaces

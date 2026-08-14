@@ -60,6 +60,10 @@ class VersioningTests(unittest.TestCase):
         self.assertEqual(loaded["label"], "baseline")
         self.assertIn("demo", loaded["workspaces"])
 
+    def test_snapshot_ids_are_unique_within_one_second(self):
+        ids = {v._slug_id() for _ in range(100)}
+        self.assertEqual(len(ids), 100)
+
     def test_resolve_latest_and_previous(self):
         data = {"demo": _minimal_workspace()}
         v.save_snapshot(data, label="v1")

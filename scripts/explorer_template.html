@@ -4,9 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__ · Interactive Map</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'self'; connect-src 'none'">
+<script src="../assets/cytoscape.min.js"></script>
+<script src="../assets/dagre.min.js"></script>
+<script src="../assets/cytoscape-dagre.min.js"></script>
 <style>
   :root {
     --bg:#0f1115; --bg2:#1a1d24; --bg3:#252932; --border:#2e3340;
@@ -230,6 +231,36 @@
   .filter-menu label:hover{color:var(--accent)}
   .filter-sep{border-top:1px solid var(--border);margin:7px 0 1px}
   .toolbar button.active{border-color:var(--accent);color:var(--accent)}
+  .node-nav-wrap{position:relative}
+  .node-nav-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;
+    max-width:calc(100vw - 24px);max-height:60vh;overflow:hidden;background:var(--bg2);
+    border:1px solid var(--border);border-radius:6px;padding:10px;z-index:140;
+    box-shadow:0 4px 20px rgba(0,0,0,0.45)}
+  .node-nav-menu.open{display:flex;flex-direction:column;gap:8px}
+  .node-nav-menu input{width:100%}
+  .node-nav-list{overflow:auto;display:flex;flex-direction:column;gap:4px}
+  .node-nav-list button{text-align:left;width:100%;white-space:normal}
+  .node-nav-list button small{display:block;color:var(--muted);margin-top:2px}
+  .panel-toggle{display:none}
+  .copy-fallback{position:fixed;inset:20%;z-index:300;background:var(--bg2);border:2px solid var(--accent);
+    border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px #000}
+  .copy-fallback textarea{flex:1;min-height:140px;background:var(--bg);color:var(--text);padding:10px}
+  @media (max-width:700px){
+    body{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto minmax(260px,1fr);
+      grid-template-areas:"toolbar" "graph"}
+    .toolbar{padding:8px;gap:8px;max-height:44vh;overflow-y:auto;min-width:0;width:100%}
+    .toolbar h1{width:100%;min-width:0}.toolbar h1 .sub{display:block;margin:3px 0 0}
+    .toolbar .spacer{display:none}
+    .toolbar input{width:min(100%,260px)}.toolbar .stats{width:100%}
+    .resizer{display:none}.legend{max-width:calc(100vw - 24px);max-height:110px;overflow:auto}
+    .panel{position:fixed;z-index:180;left:0;right:0;top:38%;bottom:0;border-left:0;
+      border-top:2px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.45)}
+    .panel.empty{display:none}
+    .panel-toggle{display:block;position:fixed;right:12px;bottom:12px;z-index:210;
+      background:var(--accent);color:#0f1115;border:0;border-radius:18px;padding:8px 13px;font-weight:600}
+    body.panel-collapsed .panel{display:none}
+    body.panel-collapsed .panel-toggle{display:block}
+  }
 </style>
 <script>
   // Apply the saved theme before first paint to avoid a flash. Default dark.
@@ -240,9 +271,9 @@
 
 <div class="toolbar">
   <h1>__TITLE__<span class="sub">interactive map · click any node</span></h1>
-  <input id="search" placeholder="Search forms, fields, conditions, actions..." autocomplete="off">
-  <span class="match-count" id="match-count"></span>
-  <select id="layout">
+  <input id="search" aria-label="Search forms, fields, conditions, and actions" placeholder="Search forms, fields, conditions, actions..." autocomplete="off">
+  <span class="match-count" id="match-count" role="status" aria-live="polite"></span>
+  <select id="layout" aria-label="Graph layout">
     <option value="preset">Layout: Hub &amp; Spoke</option>
     <option value="cose">Layout: Force</option>
     <option value="circle">Layout: Circle</option>
@@ -250,11 +281,11 @@
     <option value="breadthfirst">Layout: Hierarchy</option>
     <option value="dagre">Layout: Dagre</option>
   </select>
-  <select id="field-display">
+  <select id="field-display" aria-label="Field display mode">
     <option value="name">Fields: Name</option>
     <option value="label">Fields: Label</option>
   </select>
-  <select id="field-sort">
+  <select id="field-sort" aria-label="Field sort order">
     <option value="original">Sort: Original</option>
     <option value="required-first">Sort: Required first</option>
     <option value="hidden-last">Sort: Hidden last</option>
@@ -264,8 +295,8 @@
   <button id="reset">Reset</button>
   <button id="theme-toggle" title="Toggle light / dark">Light mode</button>
   <div class="filter-wrap" id="filter-wrap">
-    <button id="filter-btn" onclick="toggleFilterMenu()">Filters ▾</button>
-    <div class="filter-menu" id="filter-menu">
+    <button id="filter-btn" aria-expanded="false" aria-controls="filter-menu" onclick="toggleFilterMenu()">Filters ▾</button>
+    <div class="filter-menu" id="filter-menu" role="group" aria-label="Graph filters">
       <div class="filter-group-label">Workflows</div>
       <label><input type="checkbox" data-filter="wfLegacy"> Legacy</label>
       <label><input type="checkbox" data-filter="wfEngine"> WF Engine</label>
@@ -277,11 +308,18 @@
       <label><input type="checkbox" data-filter="orphaned"> Orphaned</label>
     </div>
   </div>
+  <div class="node-nav-wrap" id="node-nav-wrap">
+    <button id="node-nav-btn" aria-expanded="false" aria-controls="node-nav-menu">Browse nodes</button>
+    <div class="node-nav-menu" id="node-nav-menu">
+      <input id="node-nav-search" aria-label="Filter graph nodes" placeholder="Filter graph nodes..." autocomplete="off">
+      <div class="node-nav-list" id="node-nav-list" role="tree" aria-label="Forms and workflows"></div>
+    </div>
+  </div>
   <div class="spacer"></div>
   <div class="stats" id="stats"></div>
 </div>
 
-<div id="cy"></div>
+<div id="cy" aria-hidden="true"></div>
 
 <div class="legend">
   <div class="item"><div class="dot" style="background:var(--hub)"></div>Hub</div>
@@ -293,13 +331,19 @@
   <div class="item" style="color:var(--muted)">solid edge = relationship · dashed = workflow trigger/target · dimmed = disabled</div>
 </div>
 
-<div class="resizer" id="resizer" title="Drag to resize"></div>
+<div class="resizer" id="resizer" role="separator" aria-label="Resize detail panel" aria-orientation="vertical" tabindex="0" title="Drag or use arrow keys to resize"></div>
 
 <div class="panel empty" id="panel">
   Click a node to inspect.<br>Scroll to zoom · drag to pan.
 </div>
+<button class="panel-toggle" id="panel-toggle" aria-controls="panel" aria-expanded="true">Details</button>
 
 <script>
+if (typeof cytoscape === 'undefined') {
+  document.getElementById('panel').className = 'panel';
+  document.getElementById('panel').textContent = 'The graph runtime is missing. Re-run the rebuild to restore assets.';
+  throw new Error('Cytoscape runtime unavailable');
+}
 const DATA = __DATA__;
 
 const stats = document.getElementById('stats');
@@ -314,7 +358,7 @@ DATA.refPulls.forEach(r => {
   }
 });
 
-stats.textContent = `${DATA.forms.length} forms · ${DATA.relationships.length} relationships · ${DATA.refPulls.length} ref-pulls · ${Object.values(DATA.fields).reduce((a,b)=>a+b.length,0)} fields · ${DATA.workflows.length} workflow`;
+stats.textContent = `${DATA.forms.length} forms · ${DATA.relationships.length} relationships · ${DATA.refPulls.length} ref-pulls · ${Object.values(DATA.fields).reduce((a,b)=>a+b.length,0)} fields · ${DATA.workflows.length} workflows`;
 
 // Build cytoscape elements
 const elements = [];
@@ -532,11 +576,46 @@ const cy = cytoscape({
     }},
   ],
   layout: INITIAL,
-  wheelSensitivity: 0.2,
   minZoom: 0.2, maxZoom: 3,
 });
 
 cy.ready(() => { cy.fit(undefined, 60); selectFromHash(); });
+
+// Accessible DOM navigator for the canvas graph. Native buttons provide the
+// keyboard/screen-reader selection path that a canvas cannot expose.
+const nodeNavBtn = document.getElementById('node-nav-btn');
+const nodeNavMenu = document.getElementById('node-nav-menu');
+const nodeNavSearch = document.getElementById('node-nav-search');
+const nodeNavList = document.getElementById('node-nav-list');
+const nodeNavEntries = [
+  ...DATA.forms.map(f => ({id:f.name, label:f.name, meta:`${f.role} · ${f.fieldCount} fields`})),
+  ...DATA.workflows.map(w => ({id:'WF:'+w.callsign, label:w.name, meta:`Workflow · ${w.callsign}`})),
+].sort((a,b) => a.label.localeCompare(b.label));
+function renderNodeNavigator(raw=''){
+  const q = raw.toLowerCase().trim();
+  nodeNavList.replaceChildren();
+  nodeNavEntries.filter(x => !q || x.label.toLowerCase().includes(q) || x.meta.toLowerCase().includes(q))
+    .forEach(x => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.setAttribute('role','treeitem'); button.dataset.nodeId = x.id;
+      const label = document.createElement('span'); label.textContent = x.label;
+      const meta = document.createElement('small'); meta.textContent = x.meta;
+      button.append(label, meta);
+      button.addEventListener('click', () => {
+        const node = cy.$id(x.id);
+        if (node.nonempty()) { node.emit('tap'); cy.animate({center:{eles:node}}, {duration:250}); }
+        nodeNavMenu.classList.remove('open'); nodeNavBtn.setAttribute('aria-expanded','false');
+      });
+      nodeNavList.appendChild(button);
+    });
+}
+nodeNavBtn.addEventListener('click', () => {
+  const open = nodeNavMenu.classList.toggle('open');
+  nodeNavBtn.setAttribute('aria-expanded', String(open));
+  if (open) { renderNodeNavigator(nodeNavSearch.value); nodeNavSearch.focus(); }
+});
+nodeNavSearch.addEventListener('input', e => renderNodeNavigator(e.target.value));
+renderNodeNavigator();
 
 // Deep links: #form=<name> (from the global explorer) opens with that form
 // selected; #wf=<callsign> opens with that workflow selected (bookmark/share).
@@ -552,6 +631,13 @@ function selectFromHash(){
 
 // Panel rendering
 const panel = document.getElementById('panel');
+const panelToggle = document.getElementById('panel-toggle');
+function setPanelOpen(open){
+  document.body.classList.toggle('panel-collapsed', !open);
+  panelToggle.setAttribute('aria-expanded', String(open));
+}
+panelToggle.addEventListener('click', () =>
+  setPanelOpen(document.body.classList.contains('panel-collapsed')));
 let activeNodeId = null;
 let activeFieldFilter = '';
 let activeModeFilter = '';       // '' | 'Advanced' | 'Conditional' -- config authoring mode
@@ -579,11 +665,13 @@ function renderEmpty(){
   panel.innerHTML = 'Click a node to inspect.<br>Scroll to zoom · drag to pan.';
   activeNodeId = null;
   clearHighlights();
+  if (window.matchMedia('(max-width:700px)').matches) setPanelOpen(false);
 }
 
 function renderForm(formName){
   const f = DATA.forms.find(x => x.name === formName);
   if (!f) return;
+  setPanelOpen(true);
   saveFormFieldState(currentFormName);
   currentFormName = formName;
 
@@ -619,13 +707,13 @@ function renderForm(formName){
   panel.className = 'panel';
   panel.innerHTML = `
     <button class="close-btn" onclick="renderEmpty()">×</button>
-    <button class="pin-btn${pinnedForm===formName?' active':''}" onclick="togglePin('${escapeAttr(formName)}')">${pinnedForm===formName?'Pinned':'Pin'}</button>
+    <button class="pin-btn${pinnedForm===formName?' active':''}" onclick="togglePin(${inlineArg(formName)})">${pinnedForm===formName?'Pinned':'Pin'}</button>
     <button id="export-btn" class="pin-btn" onclick="exportFormMarkdown()" title="Copy field list as markdown">Export</button>
     ${formHistory.length > 1 ? `<div class="breadcrumb">${formHistory.map((n,i) => {
       const last = i === formHistory.length - 1;
       return last
         ? `<span class="bc-current">${escapeHtml(n)}</span>`
-        : `<span class="bc-link" onclick="cy.$id('${escapeAttr(n)}').emit('tap')">${escapeHtml(n)}</span>`;
+        : `<span class="bc-link" role="button" tabindex="0" onclick="cy.$id(${inlineArg(n)}).emit('tap')">${escapeHtml(n)}</span>`;
     }).join('<span class="bc-sep">›</span>')}</div>` : ''}
     <h2>${escapeHtml(f.name)}</h2>
     <span class="role ${f.role}">${f.role}</span>${f.featured ? '<span class="badge featured">Featured</span>' : ''}
@@ -648,7 +736,7 @@ function renderForm(formName){
         <br><span class="muted">${escapeHtml(nar.summary.fields)}${
           nar.summary.interactions ? ' ' + escapeHtml(nar.summary.interactions) : ''}</span>
       </div>
-      <a class="brief-link" href="forms/${escapeAttr(briefFilename(formName))}.html" target="_blank" rel="noopener">Open full brief &rarr;</a>
+      <a class="brief-link" href="forms/${encodeURIComponent(briefFilename(formName))}.html" target="_blank" rel="noopener">Open full brief &rarr;</a>
     </div>` : ''}
 
     ${outgoingRels.length ? `<div class="section"><h3>Outgoing relationships</h3>
@@ -662,7 +750,7 @@ function renderForm(formName){
       </div>` : ''}
 
     ${wfsTouching.length ? `<div class="section"><h3>Workflows touching this form</h3>
-      ${wfsTouching.map(w => `<div class="wf-card" onclick="cy.$('#WF:${w.callsign}').emit('tap')">
+      ${wfsTouching.map(w => `<div class="wf-card" role="button" tabindex="0" onclick="cy.$id(${inlineArg('WF:'+w.callsign)}).emit('tap')">
         <span class="cs">${escapeHtml(w.callsign)}</span>
         <div class="nm">${escapeHtml(w.name)}</div>
       </div>`).join('')}
@@ -692,11 +780,11 @@ function renderForm(formName){
         ${ixFields.slice(0, 12).map(fn => {
           const e = nar.forward[fn];
           const n = e.fields.length + e.wfCondition.length;
-          return `<div class="ix-row" onclick="focusFieldDetail('${escapeAttr(formName)}','${escapeAttr(fn)}')">
+          return `<div class="ix-row" role="button" tabindex="0" onclick="focusFieldDetail(${inlineArg(formName)},${inlineArg(fn)})">
             <span class="n">${escapeHtml(fn)}</span> <span class="c">&rarr; ${n} effect(s)</span></div>`;
         }).join('')}
         ${ixFields.length > 12 ? `<div class="ix-row"><span class="c">+${ixFields.length - 12} more fields</span></div>` : ''}
-        <button class="mini-btn" style="margin-top:10px" onclick="toggleMiniMap('${escapeAttr(formName)}',this)">Show interaction map</button>
+        <button class="mini-btn" style="margin-top:10px" onclick="toggleMiniMap(${inlineArg(formName)},this)">Show interaction map</button>
         <div id="mini-cy-wrap"></div>
       </details>
     </div>` : ''}
@@ -775,6 +863,16 @@ function sortFields(fields){
   return copy;
 }
 
+function orderedVisibleFields(formName){
+  const groups = [], byKey = {};
+  visibleFields(formName).forEach(f => {
+    const key = f.section ? (f.page||'')+'\x00'+f.section : (f.page?'\x01'+f.page:'\x02');
+    if (!byKey[key]) { byKey[key] = []; groups.push(byKey[key]); }
+    byKey[key].push(f);
+  });
+  return groups.flatMap(sortFields);
+}
+
 // Move the roving tabindex to a specific row and focus it (used by arrow-key navigation).
 function setRovingRow(row){
   if (!row) return;
@@ -830,7 +928,7 @@ function exportFormMarkdown(){
   const f = DATA.forms.find(x => x.name === currentFormName);
   if (!f) return;
   const allFields = DATA.fields[currentFormName] || [];
-  const visible = visibleFields(currentFormName);
+  const visible = orderedVisibleFields(currentFormName);
   const incomingRels = DATA.relationships.filter(r => r.target === currentFormName);
   const outgoingRels = DATA.relationships.filter(r => r.source === currentFormName);
   const wfsTouching = DATA.workflows.filter(w =>
@@ -858,9 +956,7 @@ function exportFormMarkdown(){
   const done = () => {
     if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(()=>{btn.textContent=orig;},1500); }
   };
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(md).then(done).catch(()=>{ fallbackCopy(md); done(); });
-  } else { fallbackCopy(md); done(); }
+  copyText(md, done, () => showManualCopy(md));
 }
 
 function togglePin(formName){
@@ -951,9 +1047,9 @@ function renderFieldList(formName, refocus){
     const secondary = fieldDisplayMode === 'label' ? f.name : (f.label || '');
     return `<div class="field-row" data-field="${escapeAttr(f.name)}" tabindex="-1" role="option">
       <div class="field ${dirs?'touched':''} ${isExp?'expanded':''}"
-           onclick="toggleField(this,'${escapeAttr(formName)}','${escapeAttr(f.name)}')">
+           onclick="toggleField(this,${inlineArg(formName)},${inlineArg(f.name)})">
         <span class="chev"></span>
-        <span class="fname">${escapeHtml(primary)}</span><button class="copy-btn" title="Copy API name: ${escapeAttr(f.name)}" onclick="copyFieldName(event,'${escapeAttr(f.name)}')">⧉</button>
+        <span class="fname">${escapeHtml(primary)}</span><button class="copy-btn" title="Copy API name: ${escapeAttr(f.name)}" onclick="copyFieldName(event,${inlineArg(f.name)})">⧉</button>
         <span class="ftype">${escapeHtml(f.type||'')}</span>
         <span class="flbl">${escapeHtml(secondary)}</span>
         <span class="badges">
@@ -1013,8 +1109,26 @@ function renderFieldList(formName, refocus){
 function fallbackCopy(text){
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
-  document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+  document.body.appendChild(ta); ta.select();
+  let copied = false;
+  try { copied = document.execCommand('copy') === true; } catch(e) { copied = false; }
   document.body.removeChild(ta);
+  return copied;
+}
+
+function showManualCopy(text){
+  const wrap = document.createElement('div'); wrap.className = 'copy-fallback';
+  const note = document.createElement('div'); note.textContent = 'Automatic copy failed. Copy the selected text manually.';
+  const area = document.createElement('textarea'); area.readOnly = true; area.value = text;
+  const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Close';
+  close.addEventListener('click', () => wrap.remove());
+  wrap.append(note, area, close); document.body.appendChild(wrap); area.select(); area.focus();
+}
+
+function copyText(text, onSuccess, onFailure){
+  const fallback = () => fallbackCopy(text) ? onSuccess() : onFailure();
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(onSuccess).catch(fallback);
+  else fallback();
 }
 
 function copyFieldName(evt, fieldName){
@@ -1025,11 +1139,7 @@ function copyFieldName(evt, fieldName){
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = '⧉'; btn.classList.remove('copied'); }, 1500);
   };
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(fieldName).then(done).catch(() => { fallbackCopy(fieldName); done(); });
-  } else {
-    fallbackCopy(fieldName); done();
-  }
+  copyText(fieldName, done, () => showManualCopy(fieldName));
 }
 
 function clearFieldFilter(){
@@ -1169,8 +1279,8 @@ function expandAllFields(){
   const visible = visibleFields(currentFormName);
   const toOpen = visible.filter(f => !expandedFields.has(f.name));
   if (!toOpen.length) return;
-  if (toOpen.length > 20 &&
-      !confirm(`Expand all ${toOpen.length} fields? This may take a moment on a large form.`)) {
+  if (toOpen.length > 100) {
+    alert(`Narrow the field filter before expanding. At most 100 fields can be expanded at once; ${toOpen.length} are visible.`);
     return;
   }
   visible.forEach(f => expandedFields.add(f.name));
@@ -1184,7 +1294,7 @@ function collapseAllFields(){
 
 // Flash the connected form when a relationship field is expanded.
 function pulseConnectedForm(formName, fieldName){
-  const field = (DATA.fields[formName]||[]).find(f => f.name === fieldName);
+  const field = formFieldIndex(formName).fieldsByName.get(fieldName);
   if (!field) return;
   let cf = null;
   if (field.component === 'FormRelationshipInput') cf = field.relatedForm || null;
@@ -1226,36 +1336,54 @@ const FORWARD_BADGE = {visibility:'VISIBLE', formula:'FX', validation:'REQ', fil
 
 // A field's human name: label when present, else the API name.
 function fieldLabelOf(formName, apiName){
-  const f = (DATA.fields[formName]||[]).find(x => x.name === apiName);
+  const f = formFieldIndex(formName).fieldsByName.get(apiName);
   const lbl = f && (f.label||'').trim();
   return (lbl && lbl !== apiName) ? lbl : apiName;
 }
 // narrative wfCondition/writtenBy entries are {callsign, name} objects; show the name.
 const wfRefName = r => (r && (r.name || r.callsign)) || String(r);
 
+const formFieldIndexCache = new Map();
+function formFieldIndex(formName){
+  if (formFieldIndexCache.has(formName)) return formFieldIndexCache.get(formName);
+  const fields = DATA.fields[formName] || [];
+  const fieldsByName = new Map(fields.map(f => [f.name, f]));
+  const usageByField = new Map(), referencedByField = new Map(), intraByField = new Map();
+  DATA.workflows.forEach(w => w.fieldUsage.forEach(u => {
+    if (u.form !== formName) return;
+    if (!usageByField.has(u.field)) usageByField.set(u.field, []);
+    usageByField.get(u.field).push({wf:w, usage:u});
+  }));
+  DATA.refPulls.forEach(r => {
+    if (relationshipTarget(r.destForm, r.via) !== formName) return;
+    if (!referencedByField.has(r.sourceField)) referencedByField.set(r.sourceField, []);
+    referencedByField.get(r.sourceField).push({form:r.destForm, via:r.via, localField:r.destField});
+  });
+  const kinds = ['validation','formula','filter','visibility'];
+  fields.forEach(g => kinds.forEach(kind => ((g.dependsOn||{})[kind]||[]).forEach(dep => {
+    if (!intraByField.has(dep)) intraByField.set(dep, []);
+    intraByField.get(dep).push({by:g.name, kind});
+  })));
+  const index = {fieldsByName, usageByField, referencedByField, intraByField};
+  formFieldIndexCache.set(formName, index);
+  return index;
+}
+
 function fieldDetailHTML(formName, fieldName){
-  const field = (DATA.fields[formName]||[]).find(f => f.name === fieldName);
+  const index = formFieldIndex(formName);
+  const field = index.fieldsByName.get(fieldName);
   if (!field) return '';
 
   // Forward triggers: what changing THIS field activates (fields + workflow branches).
   const fwd = (DATA.narrative && DATA.narrative[formName]
                && DATA.narrative[formName].forward[fieldName]) || null;
 
-  const usages = [];
-  DATA.workflows.forEach(w => w.fieldUsage.forEach(u => {
-    if (u.form === formName && u.field === fieldName) usages.push({wf:w, usage:u});
-  }));
+  const usages = index.usageByField.get(fieldName) || [];
 
   // Reverse direction: forms that pull this field in via a ReferenceDataInput.
   // A refPull {destForm, via, sourceField} pulls sourceField from the form that
   // destForm reaches through relationship `via`; match that resolved form + field.
-  const referencedBy = [];
-  DATA.refPulls.forEach(r => {
-    if (r.sourceField !== fieldName) return;
-    if (relationshipTarget(r.destForm, r.via) === formName) {
-      referencedBy.push({form: r.destForm, via: r.via, localField: r.destField});
-    }
-  });
+  const referencedBy = index.referencedByField.get(fieldName) || [];
 
   // Intra-form reverse: other fields on this form whose config depends on this field.
   const KIND_PHRASE = {
@@ -1265,13 +1393,7 @@ function fieldDetailHTML(formName, fieldName){
     visibility: f => `Visibility condition on ${f}`,
   };
   const KIND_BADGE = {validation:'REQ', formula:'FX', filter:'FILTER', visibility:'VISIBLE'};
-  const intraRefs = [];
-  (DATA.fields[formName] || []).forEach(g => {
-    const dep = g.dependsOn || {};
-    Object.keys(KIND_PHRASE).forEach(kind => {
-      if ((dep[kind] || []).includes(fieldName)) intraRefs.push({by: g.name, kind});
-    });
-  });
+  const intraRefs = index.intraByField.get(fieldName) || [];
 
   return `
     <div class="meta">
@@ -1335,6 +1457,7 @@ function renderWorkflow(callsign){
   currentFormName = null;
   const w = DATA.workflows.find(x => x.callsign === callsign);
   if (!w) return;
+  setPanelOpen(true);
   const st = (DATA.wfStories && DATA.wfStories[callsign]) || null;
   const cf = (DATA.wfConflicts && DATA.wfConflicts[callsign]) || null;
   panel.className = 'panel';
@@ -1356,16 +1479,16 @@ function renderWorkflow(callsign){
       <div class="wf-conflict-panel">
         ${cf.map(c => `<div class="cf-row">
           Also writes <span class="cf-field">${escapeHtml(c.form)} · ${escapeHtml(c.field)}</span>:
-          ${c.others.map(o => `<span class="cf-link" onclick="cy.$id('WF:${escapeAttr(o.callsign)}').emit('tap')">${escapeHtml(o.name)}</span>`).join(', ')}
+          ${c.others.map(o => `<span class="cf-link" role="button" tabindex="0" onclick="cy.$id(${inlineArg('WF:'+o.callsign)}).emit('tap')">${escapeHtml(o.name)}</span>`).join(', ')}
         </div>`).join('')}
       </div>
     </div>` : ''}
 
     <div class="section"><h3>Trigger</h3>
-      <div class="usage Condition">
+      ${w.trigger ? `<div class="usage Condition">
         <span class="dir">${escapeHtml(w.trigger.type.split(' · ')[0])}</span>${escapeHtml(w.trigger.form)}
         <div class="ctx">${escapeHtml(w.trigger.condition)}</div>
-      </div>
+      </div>` : '<div class="empty-state">No trigger configured. This workflow cannot run until a trigger is added.</div>'}
     </div>
 
     <div class="section"><h3>Actions</h3>
@@ -1409,6 +1532,7 @@ function highlightWorkflow(w){
 // field-detail. Renders every individual relationship carried by the edge even
 // when its graph label is an aggregate count.
 function renderEdge(e){
+  setPanelOpen(true);
   saveFormFieldState(currentFormName);
   currentFormName = null;
   const src = e.data('source'), tgt = e.data('target');
@@ -1432,8 +1556,8 @@ function renderEdge(e){
     </div>
 
     <div class="section"><h3>Navigate</h3>
-      <button class="mini-btn" style="margin-right:6px" onclick="cy.$id('${escapeAttr(src)}').emit('tap')">View source form</button>
-      <button class="mini-btn" onclick="cy.$id('${escapeAttr(tgt)}').emit('tap')">View target form</button>
+      <button class="mini-btn" style="margin-right:6px" onclick="cy.$id(${inlineArg(src)}).emit('tap')">View source form</button>
+      <button class="mini-btn" onclick="cy.$id(${inlineArg(tgt)}).emit('tap')">View target form</button>
     </div>
   `;
 }
@@ -1518,6 +1642,9 @@ document.getElementById('layout').addEventListener('change', e => {
 document.getElementById('fit').addEventListener('click', () => cy.fit(undefined, 60));
 document.getElementById('reset').addEventListener('click', () => {
   cy.layout(INITIAL).run();
+  const search = document.getElementById('search');
+  search.value = '';
+  runSearch('');
   renderEmpty();
 });
 
@@ -1532,7 +1659,13 @@ function setTheme(t){
   // and re-apply to the (canvas-rendered) nodes since they can't track var() live.
   ROLE_COLOR = roleColors();
   if (typeof cy !== 'undefined') {
-    cy.nodes().forEach(n => n.style('background-color', ROLE_COLOR[n.data('role')] || '#888'));
+    cy.nodes().forEach(n => n.style('background-color', n.data('kind') === 'workflow'
+      ? (n.data('workflowType') === 'Legacy' ? ROLE_COLOR.WfLegacy : ROLE_COLOR.WfEngine)
+      : (ROLE_COLOR[n.data('role')] || '#888')));
+    cy.edges('[kind="wf-edge"]').forEach(e => {
+      const color = e.data('workflowType') === 'Legacy' ? ROLE_COLOR.WfLegacy : ROLE_COLOR.WfEngine;
+      e.style({'line-color':color, 'target-arrow-color':color});
+    });
   }
 }
 let savedTheme = 'dark';
@@ -1601,7 +1734,11 @@ function runSearch(raw){
   }
 }
 
-document.getElementById('search').addEventListener('input', e => runSearch(e.target.value));
+let graphSearchTimer;
+document.getElementById('search').addEventListener('input', e => {
+  clearTimeout(graphSearchTimer);
+  graphSearchTimer = setTimeout(() => runSearch(e.target.value), 120);
+});
 
 // Node filter toolbar — 6 categories with localStorage persistence per workspace slug.
 // Four ordered passes, single-level (no fixpoint):
@@ -1675,13 +1812,31 @@ function applyFilters(){
 }
 
 function toggleFilterMenu(){
-  document.getElementById('filter-menu').classList.toggle('open');
+  const menu = document.getElementById('filter-menu');
+  const open = menu.classList.toggle('open');
+  document.getElementById('filter-btn').setAttribute('aria-expanded', String(open));
 }
 
 document.addEventListener('click', e => {
   const wrap = document.getElementById('filter-wrap');
   if (wrap && !wrap.contains(e.target))
-    document.getElementById('filter-menu').classList.remove('open');
+    {
+      document.getElementById('filter-menu').classList.remove('open');
+      document.getElementById('filter-btn').setAttribute('aria-expanded','false');
+    }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const filterMenu = document.getElementById('filter-menu');
+  const navMenu = document.getElementById('node-nav-menu');
+  if (filterMenu.classList.contains('open')) {
+    filterMenu.classList.remove('open');
+    document.getElementById('filter-btn').setAttribute('aria-expanded','false');
+    document.getElementById('filter-btn').focus();
+  } else if (navMenu.classList.contains('open')) {
+    navMenu.classList.remove('open'); nodeNavBtn.setAttribute('aria-expanded','false'); nodeNavBtn.focus();
+  }
 });
 
 document.querySelectorAll('#filter-menu input[type=checkbox]').forEach(cb => {
@@ -1727,6 +1882,9 @@ try { fieldSortMode = localStorage.getItem(FIELD_SORT_KEY) || 'original'; } catc
 // is rebuilt on every renderFieldList call. Roving-tabindex pattern: exactly one
 // .field-row carries tabindex="0" at any time; arrows move within the list.
 panel.addEventListener('keydown', e => {
+  if (e.target.getAttribute('role') === 'button' && (e.key === 'Enter' || e.key === ' ')) {
+    e.preventDefault(); e.target.click(); return;
+  }
   if (!e.target.classList.contains('field-row')) return;
   const list = document.getElementById('field-list');
   if (!list) return;
@@ -1765,13 +1923,11 @@ panel.addEventListener('keydown', e => {
 
 // Helpers
 function escapeHtml(s){return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function escapeAttr(s){return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+function escapeAttr(s){return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function inlineArg(s){return escapeHtml(JSON.stringify(String(s)));}
 // Mirrors regenerate.py's _brief_filename(): strip characters illegal in a
-// Windows filename, but leave everything else (spaces, parens, #, etc.)
-// unescaped so the href matches the literal filename on disk. Do NOT
-// encodeURIComponent this — the file was saved with the plain name, and a
-// browser resolving a percent-encoded href decodes it before the filesystem
-// lookup, so encoding here would look for a filename that doesn't exist.
+// Windows filename. The caller URL-encodes the resulting path component so
+// characters such as # are not interpreted as fragments.
 function briefFilename(formName){return String(formName).replace(/[<>:"/\\|?*]/g, '');}
 window.renderEmpty = renderEmpty;
 window.toggleField = toggleField;
@@ -1806,12 +1962,19 @@ window.cy = cy;
   let dragging = false;
   function setWidth(px){
     targetWidth = clamp(px);
+    if (window.matchMedia('(max-width:700px)').matches) {
+      document.body.style.removeProperty('grid-template-columns');
+      return;
+    }
     // Graph column is minmax(0, 1fr) so it can shrink below its content's
     // intrinsic width (the Cytoscape canvas) without overflowing/clipping;
     // the panel is a bare fixed length so it's honored exactly. Putting the
     // minmax on the panel instead lets the greedy 1fr graph swallow the space
     // and the panel never actually grows.
     document.body.style.gridTemplateColumns = 'minmax(0, 1fr) 6px ' + targetWidth + 'px';
+    resizer.setAttribute('aria-valuenow', String(Math.round(targetWidth)));
+    resizer.setAttribute('aria-valuemin', String(MIN_PANEL));
+    resizer.setAttribute('aria-valuemax', String(Math.max(MIN_PANEL, window.innerWidth - MAX_MARGIN)));
   }
   // Tracking-prevention browsers (Edge/Chrome on file:// pages) can block
   // localStorage entirely and throw — if that happens on this first call, it
@@ -1825,6 +1988,13 @@ window.cy = cy;
     resizer.classList.add('active');
     document.body.classList.add('resizing');
     e.preventDefault();
+  });
+  resizer.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    setWidth(targetWidth + (e.key === 'ArrowLeft' ? 20 : -20));
+    try { localStorage.setItem(STORAGE_KEY, Math.round(targetWidth)); } catch(e) {}
+    if (window.cy) window.cy.resize();
   });
   window.addEventListener('pointermove', e => {
     if (!dragging) return;

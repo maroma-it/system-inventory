@@ -23,6 +23,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # process. WARNINGS collects the warning subset for the end-of-run summary.
 _PRINTED_ONCE = set()
 WARNINGS = []
+_DISCOVERY_CACHE = {}
 
 def _print_once(msg):
     if msg not in _PRINTED_ONCE:
@@ -416,7 +417,9 @@ def _parse_field_assignments(json_str, target_form):
     if not json_str: return []
     try:
         items = json.loads(json_str)
-    except Exception:
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(items, list) or not all(isinstance(it, dict) for it in items):
         return []
     return [_assignment_desc(it) for it in items]
 
@@ -1003,7 +1006,12 @@ class Workspace:
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
+            except json.JSONDecodeError as exc:
+                self._warn(f"  ! [{self.slug}] invalid JSON in {path.name}: "
+                           f"line {exc.lineno}, column {exc.colno}")
+                return default
+            except OSError as exc:
+                self._warn(f"  ! [{self.slug}] cannot read {path.name}: {exc}")
                 return default
         return default
 
@@ -1231,7 +1239,10 @@ class Workspace:
         """
         cfg = self._read_json(self.manual_dir / "featured_forms.json", {})
         explicit = cfg.get("featured") if isinstance(cfg, dict) else None
-        if explicit:
+        if explicit is not None:
+            if not isinstance(explicit, list):
+                self._warn(f"  ! [{self.slug}] featured_forms.json 'featured' must be a list")
+                return []
             wanted = set(explicit)
             return [n for n in form_names if n in wanted]
         return [n for n in form_names
@@ -1248,12 +1259,15 @@ class Workspace:
           (treated as surgical updates). Each shadowing is warned about at
           rebuild time so a stale override stays visible.
 
-        Result is memoized per instance: build_inventory and build_explorer each
-        call this on the same Workspace, and the orphan report calls it once more.
-        Files don't change within a single rebuild, so the parse runs once and the
-        one-time prints (reclassification, role pins) aren't repeated.
+        Result is memoized by workspace directory for the life of the process.
+        A full rebuild constructs several Workspace instances for the same slug,
+        but source files do not change during that run.
         """
         if self._discovered is not None:
+            return self._discovered
+        cache_key = str(self.dir.resolve()).casefold()
+        if cache_key in _DISCOVERY_CACHE:
+            self._discovered = _DISCOVERY_CACHE[cache_key]
             return self._discovered
         # 1. Baseline from workspace export(s); later files merge over earlier.
         merged = {}        # form display name -> parsed form dict (+sourceFile)
@@ -1507,6 +1521,7 @@ class Workspace:
             "workflows": workflows,
             "featured": self.featured_forms([f["name"] for f in forms]),
         }
+        _DISCOVERY_CACHE[cache_key] = self._discovered
         return self._discovered
 
 

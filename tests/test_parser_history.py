@@ -144,6 +144,19 @@ class DiscoverHistoryTests(unittest.TestCase):
         self.assertEqual(len(form["versionHistory"]), 1)
         self.assertFalse([w for w in parser.WARNINGS if "multiple exports" in w])
 
+    def test_malformed_json_warns_and_uses_default(self):
+        ws = self._make_workspace({
+            "forms/Test Form/test_form_v1_design.json": [_field("A")],
+        })
+        broken = ws.manual_dir / "broken.json"
+        broken.write_text('{"featured": [', encoding="utf-8")
+        self.assertEqual(ws._read_json(broken, {"fallback": True}), {"fallback": True})
+        self.assertTrue([w for w in parser.WARNINGS if "broken.json" in w and "invalid JSON" in w])
+
+    def test_malformed_field_assignments_do_not_abort(self):
+        self.assertEqual(parser._parse_field_assignments('{"not": "a list"}', "Target"), [])
+        self.assertEqual(parser._parse_field_assignments('[null, 42]', "Target"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
