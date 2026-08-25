@@ -32,11 +32,14 @@ No output file is hand-edited. All are regenerated from the JSON exports in `dat
 
 Current workspaces (whole-workspace export baseline; all five also carry root-level individual design exports from 2026-06 that override their main forms):
 
-- `socal-whp` — **Workspace A** (98 forms / 54 workflows)
-- `sdge-whp` — **Workspace B** (46 forms / 25 workflows)
-- `sce-be` — **Workspace C** (36 forms / 22 workflows)
-- `liwp` — **Workspace D** (125 forms / 33 workflows)
+- `socal-whp` — **Workspace A** (97 forms / 43 workflows)
+- `sdge-whp` — **Workspace B** (46 forms / 23 workflows)
+- `sce-be` — **Workspace C** (36 forms / 20 workflows)
+- `liwp` — **Workspace D** (125 forms / 28 workflows)
 - `nve-qar` — **Workspace E** (10 forms / 1 workflow)
+
+Counts drift as exports land; `python scripts/regenerate.py --check` prints the current ones without
+writing anything. Treat the numbers above as a sanity check, not a contract.
 
 `socal-whp` was originally ingested via the individual-file route, then **re-baselined** to a whole-workspace export (its old `forms/`/`workflows/` individual files were deleted as that reset). It has since gained individual `forms/` overrides again. As of 2026-07-10, all five workspaces' individual form exports live in the canonical per-form layout `forms/<Form Name>/<versioned export>.json` (moved there by `scripts/organize_forms.py`); name resolution is content-based, so `form_aliases.json` stem entries are only needed where field-overlap matching can't decide.
 
@@ -125,7 +128,7 @@ JSON sits — no manual tagging needed:
   carries an additive `subformAdds: [{subform, rows}]` key that narration renders as "…and adds four
   rows to WorkOrderMeasures". Malformed/absent SubformOperations degrade to no rows, same as
   `FieldAssignments`.
-  As of the 2026-07 re-export, **all five current workspace baselines use WFEngine** (111 workflows
+  As of the 2026-07 re-export, **all five current workspace baselines use WFEngine** (115 workflows
   total) — the Legacy embedded path is kept for back-compat but is currently dormant against real data.
 
 `WorkflowType` appears as a colored column in the Workflows and AllWorkflows sheets. In both explorers, workflow nodes — and their dashed trace edges — are red for Legacy and olive (`#9fae5a`) for WFEngine, colored from shared `--wf-legacy`/`--wf-engine` CSS vars; the legend reads "WF Engine". The Excel column fills (`build_inventory.py`) are light tints of the same palette (light red = Legacy, light olive = WFEngine), so the workbook and the graph read as one color scheme.
@@ -186,7 +189,7 @@ output/
   snapshots/     ← version snapshots (<id>.json + manifest.json); git-tracked temporal history
 docs/            ← GitHub Pages publish target (HTML only; generated, not hand-edited)
   index.html       landing page listing every view (+ featured-form quick-link chips)
-  docs.html        project docs viewer (README/CLAUDE/TODO/NOTICE rendered as tabs)
+  docs.html        project docs viewer (README/CLAUDE/workflow-engine-reference/TODO/NOTICE as tabs)
   <slug>/explorer.html
   <slug>/forms/<form>.html   per-form plain-English briefs
   global/explorer.html
@@ -260,7 +263,7 @@ Form design drift uses the same fingerprint as `build_registry._form_fingerprint
 
 ### Orphan report
 
-After each workspace's two builders run, `regenerate.rebuild_workspace()` prints an `Orphans:` line via `parser.find_orphans(discovered)` — a read-only diagnostic, no output-file effect. It lists forms that render with **zero graph edges**, computed to match the explorer's degree-0 reality exactly: an edge exists for a relationship whose target form is present, and for each workflow trigger-form / action-target-form. **`refPulls` are not counted** — they fold into relationship pull totals and don't connect a node on their own. Two reasons are distinguished: `unparented grid` (a `Subform` with empty `subformOf` — its parent wasn't in the workspace export, so no `"(embedded grid)"` containment edge was drawn) and `isolated <role>` (a form with no relationship or workflow link). The remedy is the precedence mechanism: drop the form's individual JSON anywhere under `data/<slug>/` to supply the missing links. `Orphans: none` = fully connected. (Acceptance baseline as of this writing: `sdge-whp` 0, `sce-be` 1, `socal-whp`/`liwp` ~39 each — mostly unparented grids those exports don't resolve a parent for.)
+After each workspace's two builders run, `regenerate.rebuild_workspace()` prints an `Orphans:` line via `parser.find_orphans(discovered)` — a read-only diagnostic, no output-file effect. It lists forms that render with **zero graph edges**, computed to match the explorer's degree-0 reality exactly: an edge exists for a relationship whose target form is present, and for each workflow trigger-form / action-target-form. **`refPulls` are not counted** — they fold into relationship pull totals and don't connect a node on their own. Two reasons are distinguished: `unparented grid` (a `Subform` with empty `subformOf` — its parent wasn't in the workspace export, so no `"(embedded grid)"` containment edge was drawn) and `isolated <role>` (a form with no relationship or workflow link). The remedy is the precedence mechanism: drop the form's individual JSON anywhere under `data/<slug>/` to supply the missing links. `Orphans: none` = fully connected. (Acceptance baseline as of this writing: `sdge-whp` 0, `sce-be` 1, `nve-qar` 5, `socal-whp`/`liwp` 39 each — mostly unparented grids those exports don't resolve a parent for.)
 
 `discover()` is **memoized per `Workspace` instance** (`self._discovered`) so the inventory build, explorer build, and orphan report share one parse and the one-time prints (reclassification, role pins) aren't repeated. `discover_all()` constructs fresh instances, so the global build is unaffected.
 
@@ -271,7 +274,7 @@ Every `regenerate.py` run ends with `publish_docs()`, which mirrors the built HT
 - `publish_docs()` scans `output/` for whatever explorers exist and copies them, so `docs/` stays consistent regardless of which build path ran (full, `--workspace`, or `--global`). It also writes `docs/.nojekyll` so Pages serves files verbatim.
 - File mapping: `output/<slug>/workspace_explorer.html` → `docs/<slug>/explorer.html`; `output/global/global-explorer.html` → `docs/global/explorer.html`.
 - `docs/index.html` is a generated landing page (dark theme matching the explorer) listing the global view plus each workspace, with a one-line description and the last-regenerated timestamp. It is regenerated each run — never hand-edit it.
-- **`docs/docs.html`** — a "Project documentation" viewer generated by `emit_project_docs()`: the repo's markdown files (README, CLAUDE.md as "Architecture", TODO.md as "Changelog", NOTICE) rendered to HTML by `scripts/md_render.py` (stdlib-only, deterministic — no client-side markdown library) with one tab per file and `#hash` deep links (`docs.html#changelog`). Linked from the landing page as its last card. Regenerated each run — the browser copy is always one `regenerate.py` run behind edits to the markdown files.
+- **`docs/docs.html`** — a "Project documentation" viewer generated by `emit_project_docs()`: the repo's markdown files (README, CLAUDE.md as "Architecture", `workflow-engine-reference.md` as "Workflow Engine", TODO.md as "Changelog", NOTICE) rendered to HTML by `scripts/md_render.py` (stdlib-only, deterministic — no client-side markdown library) with one tab per file and `#hash` deep links (`docs.html#changelog`). Linked from the landing page as its last card. Regenerated each run — the browser copy is always one `regenerate.py` run behind edits to the markdown files.
 - **Filename rewrite:** the global explorer's cross-view deep links point at the per-workspace file by its `output/` name (`workspace_explorer.html`). Because the docs copy is renamed `explorer.html`, `publish_docs()` rewrites that string in the global copy so the deep links resolve under Pages. If the per-workspace docs filename ever changes, update that rewrite.
 - **Excel stays out of `docs/`.** Pages publishes only the browsable HTML; spreadsheets are pulled from `output/` in the repo. Don't copy `.xlsx` into `docs/`.
 - **`docs/field-index.json`** — machine-readable field index published alongside the explorers. See *Field index* below.
@@ -524,12 +527,16 @@ python scripts/expand_field_assignments.py TEMPLATE.json MAPPING.xlsx --workspac
        [--sheet NAME] [--out PATH] [--step NAME] [--action NAME] [--apply]
 ```
 
-**Only `Constant` and `FromTrigger` are implemented.** The platform also exposes `Expression` (a
-computed value referencing other fields via `{{FieldName}}` tokens) and `Clear/Set Null` in its UI, but
-neither appears anywhere in `data/` — there is no confirmed example of the literal `ValueType` string
-the platform expects for either, so a mapping row using one is a **hard error naming the row**, not a
-guess. Add support once a real exported workflow using either type is available to read the exact
-string from (see TODO.md).
+**`Constant`, `FromTrigger`, and `Expression` are implemented.** `Expression`'s literal `ValueType`
+string is `"Expression"` and its `Value` is the expression text — confirmed from an exported workflow
+(LIWP "Create System Tracker Record": `{"FieldName":"ReviewDate","ValueType":"Expression","Value":"{{@CurrentDateTime}}"}`).
+`{{Token}}` references are checked against the trigger form; engine `@`-tokens pass through and unknown
+plain tokens warn rather than error.
+
+**`Clear/Set Null` is still a hard error naming the row.** It is the fourth button in the designer's
+field-assignment control, but no exported workflow anywhere in `data/` uses it, so the literal
+`ValueType` string it expects is unknown — guessing would produce a workflow that imports and then
+misbehaves silently. Add support once a real export using it is available (see TODO.md).
 
 ## Dependencies
 
