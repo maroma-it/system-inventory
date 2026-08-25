@@ -220,10 +220,16 @@ def emit_field_index():
     Structure:
         {
           "<slug>/<FormDisplayName>": [
-            {"name": "FieldApiName", "label": "Display Label", "type": "DataType"},
+            {"name": "FieldApiName", "label": "Display Label", "type": "DataType",
+             "options": ["Choice A", "Choice B"]},
             ...
           ]
         }
+
+    "options" is present only on fields that carry a choice list (dropdowns and
+    similar). Each entry is the value a workflow condition or FieldAssignment
+    must use -- the DataSourceValues "Value" side, not "Key"; the two differ on
+    some fields and only "Value" is what the engine matches.
 
     Keys are workspace-qualified ("<slug>/<FormDisplayName>") so forms that share
     a display name across workspaces are distinct entries. Fields appear in
@@ -237,10 +243,18 @@ def emit_field_index():
         fields_by_form = data["fields"]
         for form in data["forms"]:
             key = f"{slug}/{form['name']}"
-            index[key] = [
-                {"name": f["name"], "label": f.get("label", ""), "type": f.get("type", "")}
-                for f in fields_by_form.get(form["name"], [])
-            ]
+            rows = []
+            for f in fields_by_form.get(form["name"], []):
+                row = {"name": f["name"], "label": f.get("label", ""),
+                       "type": f.get("type", "")}
+                # Additive per the contract below. Emitted only when the field
+                # actually has a choice list, so the file does not grow by an
+                # empty array on every one of ~15k fields. Values are the
+                # strings a workflow condition compares against.
+                if f.get("options"):
+                    row["options"] = f["options"]
+                rows.append(row)
+            index[key] = rows
     out = DOCS_DIR / "field-index.json"
     out.write_text(json.dumps(index, indent=2, ensure_ascii=False), encoding="utf-8")
     total = sum(len(v) for v in index.values())
@@ -627,6 +641,7 @@ def _list_snapshots():
 DOC_PAGES = [
     ("README", "README.md", "readme"),
     ("Architecture", "CLAUDE.md", "architecture"),
+    ("Workflow Engine", "workflow-engine-reference.md", "workflow-engine"),
     ("Changelog", "TODO.md", "changelog"),
     ("Notice", "NOTICE.md", "notice"),
 ]
@@ -698,6 +713,10 @@ def emit_project_docs():
                   font-size:13px;text-align:left}}
   .doc th{{background:var(--bg2)}}
   .doc hr{{border:none;border-top:1px solid var(--border);margin:24px 0}}
+  .doc blockquote{{margin:14px 0;padding:10px 16px;border-left:3px solid var(--accent);
+                  background:var(--bg2);border-radius:0 6px 6px 0}}
+  .doc blockquote > :first-child{{margin-top:0}}
+  .doc blockquote > :last-child{{margin-bottom:0}}
 </style>
 </head>
 <body>

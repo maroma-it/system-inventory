@@ -57,13 +57,37 @@ class MdRenderTests(unittest.TestCase):
 
     def test_repo_markdown_renders_balanced(self):
         root = Path(__file__).resolve().parent.parent
-        for fname in ("README.md", "CLAUDE.md", "TODO.md", "NOTICE.md"):
+        for fname in ("README.md", "CLAUDE.md", "TODO.md", "NOTICE.md",
+                      "workflow-engine-reference.md"):
             html = md_to_html((root / fname).read_text(encoding="utf-8"))
-            for tag in ("ul", "ol", "li", "table", "pre", "p"):
+            for tag in ("ul", "ol", "li", "table", "pre", "p", "blockquote"):
                 self.assertEqual(
                     html.count(f"<{tag}>"), html.count(f"</{tag}>"),
                     f"{fname}: unbalanced <{tag}>")
             self.assertNotIn("\x00", html)
+
+
+
+
+class BlockquoteTests(unittest.TestCase):
+    def test_blockquote_wraps_paragraph(self):
+        html = md_to_html("> a note")
+        self.assertIn("<blockquote>", html)
+        self.assertIn("<p>a note</p>", html)
+        self.assertNotIn("&gt;", html)
+
+    def test_blockquote_renders_nested_table(self):
+        html = md_to_html(
+            "\n".join(["> | a | b |", "> |---|---|", "> | 1 | 2 |"]))
+        self.assertIn("<blockquote><table>", html)
+        self.assertIn("<th>a</th>", html)
+
+    def test_content_after_blockquote_is_not_swallowed(self):
+        html = md_to_html("\n".join(["> quoted", "", "plain"]))
+        self.assertIn("</blockquote>", html)
+        self.assertIn("<p>plain</p>", html)
+        self.assertLess(html.index("</blockquote>"), html.index("<p>plain</p>"))
+
 
 
 if __name__ == "__main__":

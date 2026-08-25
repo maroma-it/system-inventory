@@ -34,12 +34,39 @@ class BuildAssignmentsTests(unittest.TestCase):
         ])
         self.assertEqual(len(lines), 2)
 
-    def test_unsupported_expression_type_errors(self):
+    def test_expression_type_is_supported(self):
         rows = [("{{WaterHeaterSize}}", "Expression", "ExistingWaterHeaterSize")]
+        assignments, _, errors, warnings = efa.build_assignments(
+            rows, self.trigger_fields, self.target_fields)
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+        self.assertEqual(assignments, [
+            {"FieldName": "ExistingWaterHeaterSize", "ValueType": "Expression",
+             "Value": "{{WaterHeaterSize}}"},
+        ])
+
+    def test_expression_engine_token_is_not_flagged(self):
+        rows = [("{{@CurrentDateTime}}", "Expression", "ExistingWaterHeaterSize")]
+        assignments, _, errors, warnings = efa.build_assignments(
+            rows, self.trigger_fields, self.target_fields)
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+        self.assertEqual(assignments[0]["Value"], "{{@CurrentDateTime}}")
+
+    def test_expression_unknown_token_warns_but_builds(self):
+        rows = [("calc({{NoSuchThing}} + 3)", "Expression", "ExistingWaterHeaterSize")]
+        assignments, _, errors, warnings = efa.build_assignments(
+            rows, self.trigger_fields, self.target_fields)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(assignments), 1)
+        self.assertIn("NoSuchThing", warnings[0])
+
+    def test_expression_blank_body_errors(self):
+        rows = [("", "Expression", "ExistingWaterHeaterSize")]
         assignments, _, errors, _ = efa.build_assignments(
             rows, self.trigger_fields, self.target_fields)
         self.assertEqual(assignments, [])
-        self.assertIn("isn't supported yet", errors[0])
+        self.assertIn("expression body is blank", errors[0])
 
     def test_unsupported_clear_set_null_errors(self):
         rows = [("", "Clear/Set Null", "DesktopReviewStatus")]

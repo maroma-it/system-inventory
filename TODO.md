@@ -8,24 +8,40 @@ if the design detail is ever needed.)
 
 ## Candidates
 
-- `expand_field_assignments.py` only supports Assignment Type `Constant` and `FromTrigger`. The
-  platform's `Expression` (computed `{{FieldName}}` template values) and `Clear/Set Null` types have
-  no precedent anywhere in `data/` — no confirmed literal `ValueType` string to emit, so rows using
-  either are a hard error rather than a guess. Unblock by exporting a real workflow that uses one of
-  these from the platform UI so the exact string (and, for Expression, the `Value` shape) can be read
-  off a real file; then extend `TYPE_ALIASES`/`build_assignments` the same way `FromTrigger`/`Constant`
-  are handled today.
+- `expand_field_assignments.py` still rejects Assignment Type `Clear/Set Null`. It is the fourth
+  button in the designer's field-assignment control, but no exported workflow anywhere in `data/`
+  uses it, so its literal `ValueType` string is unknown and a row using it is a hard error naming the
+  row rather than a guessed string. Unblock by building one assignment with it in the designer and
+  exporting that workflow; then extend `TYPE_ALIASES`/`build_assignments` the way `Expression` was.
+  (`Expression` itself is **done** — see Done below.)
 
-- Verify the Legacy condition operator enum. Workspace-export trigger conditions render
-  some text-field comparisons as `>=` (e.g. "Review Status is at least 'Corrections
-  Required'") where equality is almost certainly meant, and operation 12 renders as `?`
-  ("compares to" in plain English). The op map in `parser._expr_to_text` was built for
-  WFEngine exports; the Legacy enum may differ. Needs platform documentation or a
-  controlled experiment — do not guess-change the mapping.
+- **Decode condition operator codes 6, 7, 12, and 16.** `parser._expr_to_text` maps only the two
+  codes whose designer label has actually been read (`1` Is, `2` Is Not); every other code renders
+  `?`. Operand arity narrows them — `9`/`10` are the membership pair (they populate
+  `ResponseFieldValueList`), `12`/`16` are the blank pair (27 of 32 and 24 of 27 nodes carry no
+  operand at all) — but nothing distinguishes *within* a pair, and getting `12`/`16` backwards would
+  invert the meaning of 59 conditions. Resolve with one designer lookup each; the exact workflow and
+  condition for all four are listed in `workflow-engine-reference.md` §3. Do not re-introduce a
+  guessed mapping: the previous one assumed the enum followed the help text's list order, mapped four
+  codes that appear nowhere in `data/`, and rendered code 6 as "is at least" on a Text field.
 - Render record-metadata `Comparison` guards (LastModifierId vs user GUIDs) compactly
   instead of dropping them — e.g. one "(plus N system-user rules)" suffix. They're
   currently filtered out of condition text deliberately (14 GUID clauses drown the
   readable part, and their operator enum is unverified).
+- **Model Condition and Switch nodes.** The designer's `+` offers Action, Condition (True/False
+  branches), and Switch (field or custom expression, one branch per case, plus a default). No
+  workflow in `data/` uses either yet, so the parser models only Actions and ignores
+  `Steps[].OutgoingTransitions` entirely. The first branching workflow anyone builds will import
+  fine and appear in the inventory as a flat action list with the branch structure silently dropped.
+- **Parse trigger `Dependencies`.** A trigger can declare `{PrerequisiteRootDefinitionId,
+  OnFailureBehavior}` with a `Type: "Workflow"` external reference — workflow-to-workflow sequencing.
+  It is ignored today, so `narrate.build_workflow_conflicts` can flag a write race that a dependency
+  has already resolved.
+- **Cross-workspace action targets.** A workflow can write into a different workspace (LIWP's
+  `Create System Tracker Record` targets "MAROMA Test"); such exports carry two `Type: "Workspace"`
+  references. The inventory has no model for this and shows the target as dangling.
+- Workflow version numbers (the designer's `v15 · Latest version`) are not carried in the export, so
+  the version-history machinery that works for forms has nothing to key on for workflows.
 - Snapshot blobs in git history turned out to be a non-issue: measured 2026-07-16,
   all superseded snapshot blobs together pack to ~4.6 MB (git compresses the
   repetitive JSON ~20:1), so a history rewrite was evaluated and **skipped** — not
@@ -34,6 +50,36 @@ if the design detail is ever needed.)
   warning on new snapshots is about raw file size and is expected/harmless (hard
   limit is 100 MB).
 ## Done
+
+**Platform semantics captured; option sets, operators, and Expression (2026-08-24).**
+`workflow-engine-reference.md` was rewritten from a read-only schema note into a two-part reference —
+Part I (reading an export) and Part II (authoring an importable one) — and wired into the docs viewer
+as its own "Workflow Engine" tab, with a pointer from CLAUDE.md. Six individual workflow exports plus
+direct designer observation settled a lot that had been guessed at: the whole-workspace export uses
+**integer** enums while the individual (importable) export uses **strings**, and `Update Existing
+Measures` existing in both forms pins the mapping exactly; `RefId`s are synthetic per-export
+identifiers, not platform GUIDs; the action palette contains API Call and WebHook (so
+`WorkflowVariables.*` is reachable, correcting an earlier conclusion) while Human Approval, Assign
+User, and Generate Report do not exist at all; email recipient modes 2/3/5 are confirmed rather than
+inferred; `Expression` and `calc()` are layered rather than competing; and target resolution is a
+three-way choice by direction of travel (`FilterBuilder` forward, `RelationshipField` backward,
+`TriggerRecord` same-record).
+
+Four code changes followed. (1) **Option sets are extracted** from `ExtraProperties.DataSourceValues`
+into `field["options"]`/`optionDefault` and published in `docs/field-index.json` as an additive
+`options` key — 1,947 fields across 314 forms. Only the `Value` side is published: `Key` and `Value`
+differ on some fields and every disambiguating comparison in the corpus matches `Value`, so
+publishing `Key` would hand authors the string the engine will not match. (2) **The operator map was
+de-guessed** — codes 3/4/5/6 were mapped on a false assumption about enum ordering, appear nowhere in
+`data/`, and code 6 rendered "is at least" on a Text field; and the real bug was that
+`_expr_to_text` read only the scalar `ResponseFieldValue`, so membership operators lost their entire
+operand list. 36 conditions now render operands that were previously discarded. (3) **`Expression` is
+supported** in `expand_field_assignments.py`, with `{{Token}}` references validated against the
+trigger form (engine `@`-tokens pass through; unknown plain tokens warn rather than error).
+(4) **`TriggerRecord` targets resolve** to the trigger form, so the three self-updating workflows name
+a form instead of narrating "Updates a record" and contributing no edge. Also added blockquote
+support to `md_render.py` (rendered recursively, so quoted tables and lists work). 56 tests.
+
 
 **UI, security, and reliability hardening (2026-08-13).** Explorers now run fully
 offline from vendored, pinned graph libraries; use responsive mobile detail sheets;

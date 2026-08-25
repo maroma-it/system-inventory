@@ -13,18 +13,23 @@ or literal value, depending on Assignment Type), the Assignment Type, and the
 Resolution column (the target field on the form being updated). Field names
 are validated against docs/field-index.json.
 
-SUPPORTED Assignment Types (v1): Constant, FromTrigger ("From Trigger" also
-accepted). Expression and Clear/Set Null are NOT yet supported -- their exact
-platform ValueType string has no precedent anywhere in data/, so rather than
-guess and silently produce a workflow that imports but misbehaves, a row
-using either type is a hard error naming the row. See TODO.md.
+SUPPORTED Assignment Types: Constant, FromTrigger ("From Trigger" also
+accepted), and Expression. Expression's platform ValueType string is the
+literal "Expression" and its Value is the expression text, confirmed from an
+exported workflow (LIWP "Create System Tracker Record":
+{"FieldName":"ReviewDate","ValueType":"Expression","Value":"{{@CurrentDateTime}}"}).
+Expression bodies are {{Token}} substitution, optionally wrapping arithmetic in
+calc(...) -- operators + - * / % and parentheses only, no function library.
+Clear/Set Null is still NOT supported: it exists as a fourth button in the
+designer, but no exported workflow uses it, so its ValueType string is unknown
+and a row using it is a hard error naming the row. See TODO.md.
 
 Mapping format (.xlsx or .csv)
   - One header row with three columns. Standard labels are matched by name
     (any order, case/spacing-insensitive):
       "Field Name (Current Form)"   -- source: trigger field (FromTrigger)
                                         or literal value (Constant)
-      "Field Assignment Type"       -- Constant | FromTrigger
+      "Field Assignment Type"       -- Constant | FromTrigger | Expression
       "Resolution (Field Name)"     -- target field on the form being updated
     When the labels aren't standard but the sheet has exactly three columns
     (real files often carry the form names as headers, e.g.
@@ -44,6 +49,7 @@ table without writing. Pass --apply to write the output file.
 import argparse
 import difflib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -66,15 +72,19 @@ TYPE_ALIASES = {
     "constant": "Constant",
     "fromtrigger": "FromTrigger",
     "from trigger": "FromTrigger",
+    "expression": "Expression",
 }
 UNSUPPORTED_TYPE_HINTS = {
-    "expression": "Expression",
     "clear/set null": "Clear/Set Null",
     "clear / set null": "Clear/Set Null",
     "clear": "Clear/Set Null",
     "set null": "Clear/Set Null",
     "clearsetnull": "Clear/Set Null",
 }
+
+
+# {{FieldName}} / {{@Today}} references inside an Expression body.
+_TOKEN_RE = re.compile(r"\{\{\s*([@\w.]+?)\s*\}\}")
 
 
 def _norm(s):
@@ -211,7 +221,7 @@ def build_assignments(rows, trigger_fields, target_fields):
             continue
         if norm_type not in TYPE_ALIASES:
             errors.append(f"row {i}: unrecognized Assignment Type '{raw_type}' -- "
-                          f"supported: Constant, From Trigger")
+                          f"supported: Constant, From Trigger, Expression")
             continue
         vt = TYPE_ALIASES[norm_type]
 
@@ -225,7 +235,24 @@ def build_assignments(rows, trigger_fields, target_fields):
                           f"{seen_targets[target]}")
             continue
 
-        if vt == "FromTrigger":
+        if vt == "Expression":
+            if not source:
+                errors.append(f"row {i}: Field Assignment Type is Expression but "
+                              f"the expression body is blank")
+                continue
+            # {{FieldName}} tokens must name trigger-form fields; {{@Today}} and
+            # friends are engine tokens and are left alone. Unknown plain tokens
+            # warn rather than error -- the token catalog is broader than the
+            # field index (record/user/system tokens, lookup dot-notation).
+            unknown = [t for t in _TOKEN_RE.findall(source)
+                       if not t.startswith("@") and t not in trigger_fields]
+            for t in unknown:
+                close = difflib.get_close_matches(t, sorted(trigger_fields), n=1, cutoff=0.7)
+                hint = f" (closest trigger field: {close[0]})" if close else ""
+                warnings.append(f"row {i}: expression token '{{{{{t}}}}}' is not a "
+                                f"trigger-form field{hint}")
+            value = source
+        elif vt == "FromTrigger":
             if not source:
                 errors.append(f"row {i}: Field Assignment Type is FromTrigger but "
                               f"Field Name (Current Form) is blank")

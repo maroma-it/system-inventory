@@ -3,7 +3,8 @@ md_render.py — minimal, deterministic Markdown -> HTML converter.
 
 Covers exactly the constructs this repo's Markdown files use (README.md,
 CLAUDE.md, TODO.md, NOTICE.md): ATX headings, fenced code blocks, pipe
-tables, nested unordered/ordered lists with hanging-indent continuation
+tables, blockquotes (rendered recursively), nested unordered/ordered lists
+with hanging-indent continuation
 lines, horizontal rules, paragraphs, and the inline set (escaped HTML,
 `code`, **bold**, *italic*, [links](url)). No third-party dependency —
 the docs viewer must build from a stock Python install like every other
@@ -97,6 +98,27 @@ def md_to_html(text):
                 continue
             close_lists()
             i += 1
+            continue
+
+        # blockquote: consecutive "> " lines. The marker is stripped and the
+        # remaining block is rendered recursively, so a quote can carry
+        # paragraphs, lists, tables, and code fences like any other content.
+        if line.lstrip().startswith(">"):
+            close_lists()
+            quoted = []
+            while i < n and (lines[i].lstrip().startswith(">") or
+                             (quoted and lines[i].strip()
+                              and not lines[i].lstrip().startswith(">"))):
+                stripped = lines[i].lstrip()
+                if stripped.startswith(">"):
+                    stripped = stripped[1:]
+                    if stripped.startswith(" "):
+                        stripped = stripped[1:]
+                    quoted.append(stripped)
+                else:
+                    quoted.append(lines[i])       # lazy continuation line
+                i += 1
+            out.append("<blockquote>" + md_to_html(chr(10).join(quoted)) + "</blockquote>")
             continue
 
         # heading

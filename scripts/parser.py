@@ -40,7 +40,7 @@ def _file_version(stem):
 FIELD_COMPARE_KEYS = (
     "label", "type", "component", "required", "hidden", "enabled",
     "relatedForm", "relatedField", "via", "validator", "formula",
-    "filter", "visibility", "defaultValue",
+    "filter", "visibility", "defaultValue", "options", "optionDefault",
 )
 
 def _field_delta(old_fields, new_fields):
@@ -234,6 +234,38 @@ def _extract_field_config(node, own_name):
     }
 
 # ── pure parsing helpers (no filesystem access) ─────────────────────
+def _option_set(ep):
+    """DropDown/picklist choices -> (ordered values, default value).
+
+    ExtraProperties.DataSourceValues is a list of {Id, Key, Value,
+    IsDefaultValue, SortOrder}. `Value` is the side a workflow condition
+    compares against -- verified across the corpus: where Key and Value
+    differ, every disambiguating condition matches Value and none match Key
+    (e.g. Key 'Ready for Review' / Value 'Completed & Ready for Review').
+    `Key` is deliberately left out of the parsed shape so authors are never
+    handed the string the engine will not match on.
+    """
+    raw = ep.get("DataSourceValues")
+    items = raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            items = json.loads(raw)
+        except Exception:
+            return [], ""
+    if not isinstance(items, list):
+        return [], ""
+    rows = [i for i in items if isinstance(i, dict) and i.get("Value") is not None]
+    rows.sort(key=lambda i: i.get("SortOrder") or 0)
+    values, default = [], ""
+    for i in rows:
+        v = str(i["Value"])
+        if v not in values:
+            values.append(v)
+        if i.get("IsDefaultValue") and not default:
+            default = v
+    return values, default
+
+
 def _node_to_field(node, ctype):
     """One design component -> one field meta dict. Shared by both formats:
     the individual-export tree walk (_walk) and the workspace-export flat list.
@@ -252,6 +284,7 @@ def _node_to_field(node, ctype):
         "enabled":  {"1":"Yes","2":"No"}.get(str(ep.get("Enabled","")), ""),
         "relatedForm": "", "relatedField": "", "via": "",
     }
+    meta["options"], meta["optionDefault"] = _option_set(ep)
     meta.update(_extract_field_config(node, name))
     if ctype == "FormRelationshipInput":
         try:
@@ -343,7 +376,19 @@ def _expr_to_text(node, ref_by_id):
     # not in workspace exports ("Grouping") — match on the prefix.
     if not isinstance(node, dict): return ""
     t = node.get("type","") or ""
-    op_map = {1:"==", 2:"!=", 3:"<", 4:"<=", 5:">", 6:">="}
+    # Only codes whose designer label has actually been read are mapped. 1/2
+    # are confirmed ("Is" / "Is Not" in the operator dropdown). Codes 3-5 were
+    # previously mapped to < <= > on the assumption the enum followed the help
+    # text's list order -- they appear NOWHERE in data/, while 6/7/9/10/12/15/16
+    # (which do appear) were unmapped. Worse, 6 rendered as ">=", producing
+    # "Review Status is at least 'Enrollment Approved'" on a Text field. An
+    # unmapped code renders "?" (narrate says "compares to"), which is honest;
+    # a wrong symbol is not. The operator list is per-field-type -- a Text field
+    # offers Is / Is Not / Is In / Not In / Is Blank / Is Not Blank / Contains /
+    # Does Not Contain / Starts With / Ends With and no ordering operators at all.
+    # To resolve a code: open the workflow in the designer, open that condition's
+    # operator dropdown, read the highlighted row, and add it here.
+    op_map = {1:"==", 2:"!="}
     if t.startswith("Grouping"):
         op = {1:" AND ", 2:" OR "}.get(node.get("Operation"), " ")
         # A child can render empty (an expression type we don't handle);
@@ -354,10 +399,22 @@ def _expr_to_text(node, ref_by_id):
     if t.startswith("FormFieldComparisonExpression"):
         fld = ref_by_id.get(node.get("FormFieldId",""), {})
         fld_name = fld.get("FieldName", "?")
-        val = node.get("ResponseFieldValue") or {}
-        val_text = val.get("Value","?") if str(val.get("type","")).startswith("ConstantTerm") else val.get("ContextName","?")
         op = op_map.get(node.get("Operation"), "?")
-        return f"{fld_name} {op} '{val_text}'"
+        # Membership operators carry their operands in ResponseFieldValueList
+        # and leave the scalar ResponseFieldValue empty; reading only the scalar
+        # (as this did) dropped the values entirely.
+        listed = [str(v.get("Value")) for v in node.get("ResponseFieldValueList") or []
+                  if isinstance(v, dict) and v.get("Value") is not None]
+        if listed:
+            return f"{fld_name} {op} 'one of: {', '.join(listed)}'"
+        val = node.get("ResponseFieldValue") or {}
+        raw = val.get("Value") if str(val.get("type","")).startswith("ConstantTerm")             else val.get("ContextName")
+        if raw is None:
+            # Unary operator (the Is Blank / Is Not Blank family): no operand at
+            # all. A stale value can linger from before the operator was changed,
+            # so only the absent-scalar case is treated as unary.
+            return f"{fld_name} {op}".rstrip()
+        return f"{fld_name} {op} '{raw}'"
     if t.startswith("FormContextExpression"):
         # Context checks from the visual rule builder, e.g. IsInGroup("Admin") —
         # ContextOption is the function name; Term(s)Value hold its argument(s).
@@ -518,7 +575,7 @@ def _minimal_field(name, label, dtype):
             "required": "", "hidden": "", "enabled": "",
             "relatedForm": "", "relatedField": "", "via": "",
             "validator": "", "formula": "", "filter": "", "visibility": "",
-            "defaultValue": "",
+            "defaultValue": "", "options": [], "optionDefault": "",
             "dependsOn": {"validation": [], "formula": [], "filter": [], "visibility": []},
             "dependsOnAll": [],
             "page": None, "section": None, "sort_order": 0}
@@ -865,6 +922,14 @@ def _parse_wfengine(d, ref_by_id, callsign, workflow_type="WFEngine", enabled=Tr
                                   or params.get("FormId", {}).get("StaticValue"))
                 target_form = ref_by_id.get(target_form_id, {}).get("FormName", "")
                 target_ws   = ref_by_id.get(target_form_id, {}).get("WorkspaceName", "")
+                # "Triggering Record" resolution carries no FormId -- it acts on
+                # the record that fired the trigger, so the target form IS the
+                # trigger form. Without this the action names no form at all
+                # ("Updates a record") and draws no edge.
+                if not target_form and params.get("TargetResolution.ResolutionType", {})                         .get("StaticValue") == "TriggerRecord":
+                    trig = wf["trigger"] or {}
+                    target_form = trig.get("form", "")
+                    target_ws = trig.get("workspace", "")
                 match_summary = _summarize_target_resolution(params, ref_by_id, target_form)
                 assignments = _parse_field_assignments(
                     params.get("FieldAssignments", {}).get("StaticValue"), target_form)

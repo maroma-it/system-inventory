@@ -46,6 +46,10 @@
                   font-size:13px;text-align:left}
   .doc th{background:var(--bg2)}
   .doc hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+  .doc blockquote{margin:14px 0;padding:10px 16px;border-left:3px solid var(--accent);
+                  background:var(--bg2);border-radius:0 6px 6px 0}
+  .doc blockquote > :first-child{margin-top:0}
+  .doc blockquote > :last-child{margin-bottom:0}
 </style>
 </head>
 <body>
@@ -56,6 +60,7 @@
   <div class="tabs">
     <button class="tab" data-tab="readme">README</button>
     <button class="tab" data-tab="architecture">Architecture</button>
+    <button class="tab" data-tab="workflow-engine">Workflow Engine</button>
     <button class="tab" data-tab="changelog">Changelog</button>
     <button class="tab" data-tab="notice">Notice</button>
   </div>
@@ -71,7 +76,7 @@
 <h2 id="live-explorer">Live explorer</h2>
 <p>The browsable explorers are published via GitHub Pages, served from the <code>docs/</code> folder:</p>
 <p><strong>https://&amp;lt;your-org&amp;gt;.github.io/system-inventory/</strong></p>
-<p>The landing page lists every view — the global cross-workspace explorer, each workspace's explorer, and a <strong>Project documentation</strong> page (<code>docs.html</code>) that renders this README, the architecture notes (CLAUDE.md), the changelog (TODO.md), and NOTICE as browser tabs. The published views are regenerated into <code>docs/</code> on every rebuild, so each push updates the live site. Spreadsheets are not published; pull the <code>.xlsx</code> files from <code>output/</code> in the repo directly.</p>
+<p>The landing page lists every view — the global cross-workspace explorer, each workspace's explorer, and a <strong>Project documentation</strong> page (<code>docs.html</code>) that renders this README, the architecture notes (CLAUDE.md), the <strong>workflow engine reference</strong> (workflow-engine-reference.md), the changelog (TODO.md), and NOTICE as browser tabs. The published views are regenerated into <code>docs/</code> on every rebuild, so each push updates the live site. Spreadsheets are not published; pull the <code>.xlsx</code> files from <code>output/</code> in the repo directly.</p>
 <h2 id="purpose">Purpose</h2>
 <p>The project answers questions about workflow automations and form architecture that the platform itself does not surface:</p>
 <ul>
@@ -80,6 +85,7 @@
 <li><strong>Cross-workspace pattern detection</strong> — given a workflow pattern, whether an equivalent already exists in another workspace. Surfaces consolidation candidates and standardization gaps.</li>
 <li><strong>Architecture documentation</strong> — a navigable map of the system for a new contributor or successor, without reading raw JSON.</li>
 <li><strong>Bus-factor mitigation</strong> — externalizes system knowledge that otherwise lives only with the people who built or maintained the workspaces.</li>
+<li><strong>Workflow authoring</strong> — <code>workflow-engine-reference.md</code> documents the platform itself: trigger and condition encodings, the action palette, target resolution, token and <code>calc()</code> syntax, and the shape of a workflow JSON the platform will import. Paired with <code>docs/field-index.json</code> (field names, types, and legal choice values) it is enough to build a new workflow against real field names rather than guesses.</li>
 </ul>
 <h3 id="common-questions-this-answers">Common questions this answers</h3>
 <ul>
@@ -118,7 +124,7 @@
 <ul>
 <li><strong><code>output/global/cross-workspace-inventory.xlsx</code></strong> — every workspace in one workbook, plus form-name collision and duplicate-flow analysis.</li>
 <li><strong><code>output/global/global-explorer.html</code></strong> — single graph with each workspace as a cluster and duplicate form names linked across clusters. Form nodes link back into the per-workspace explorer.</li>
-<li><strong><code>docs/field-index.json</code></strong> — machine-readable field index published to GitHub Pages on every rebuild. Maps <code>"&lt;slug&gt;/&lt;FormDisplayName&gt;"</code> to an array of <code>{"name", "label", "type"}</code> for every field on that form, across all workspaces. This is a stable integration interface — its structure is a contract for external tools (currently a PDF field-mapper). Do not change key format or field names without migrating consumers.</li>
+<li><strong><code>docs/field-index.json</code></strong> — machine-readable field index published to GitHub Pages on every rebuild. Maps <code>"&lt;slug&gt;/&lt;FormDisplayName&gt;"</code> to an array of <code>{"name", "label", "type"}</code> for every field on that form, across all workspaces. Fields that carry a choice list also get an <code>"options"</code> array — the exact strings a workflow condition or field assignment must use. This is a stable integration interface — its structure is a contract for external tools (currently a PDF field-mapper). Do not change key format or field names without migrating consumers.</li>
 </ul>
 <h2 id="quick-start-with-the-guided-refresh-launcher">Quick start with the guided refresh launcher</h2>
 <p>If you just want to see the latest inventory and have never touched Python or git, use the launcher for your platform — no terminal required.</p>
@@ -169,6 +175,7 @@
 │   ├── explorer_template.html   (per-workspace HTML template)
 │   ├── global_template.html     (global HTML template)
 │   └── regenerate.py            (rebuild orchestrator)
+├── workflow-engine-reference.md  (platform semantics: triggers, conditions, actions, authoring)
 ├── start.bat                    (Windows guided refresh launcher)
 ├── refresh-and-open.command     (macOS/Linux guided refresh launcher)
 ├── requirements.txt
@@ -249,6 +256,9 @@ python scripts/regenerate.py</code></pre>
 <p>Proprietary. All rights reserved. See NOTICE for full terms.</p></section>
   <section class="doc" id="architecture"><h1 id="inventory-architecture-amp-maintenance-notes">Inventory — Architecture &amp; Maintenance Notes</h1>
 <p>Reference for maintaining the inventory pipeline: architecture, data flow, override files, and the rebuild command. Read before modifying the parsers or build scripts.</p>
+<h2 id="platform-semantics-live-elsewhere">Platform semantics live elsewhere</h2>
+<p>This file documents the <strong>pipeline</strong> — how exports are parsed, merged, and rendered. It does not document the <strong>platform</strong>. Trigger enums, condition-operator codes, action parameters, target resolution, token syntax, <code>calc()</code>, and the shape of an importable workflow JSON are all in <strong><code>workflow-engine-reference.md</code></strong> (published to <code>docs/docs.html</code> as the "Workflow Engine" tab).</p>
+<p>Read it before changing anything in <code>parser.py</code> that decodes a workflow, and before hand-writing or generating a workflow export. It also records which enum codes are still undecoded — <code>parser.py</code> deliberately renders those as <code>?</code> rather than guessing, and the reference names the exact workflow to open in the designer to resolve each one.</p>
 <h2 id="what-this-project-is">What this project is</h2>
 <p>A documentation system for platform forms and workflows. It ingests JSON exports (two supported formats — see <em>Ingestion formats</em> below), parses them into a normalized structure, and produces per-workspace and cross-workspace artifacts.</p>
 <p>The project is <strong>multi-workspace</strong>. Each workspace lives under <code>data/&lt;slug&gt;/</code> and gets its own output under <code>output/&lt;slug&gt;/</code>:</p>
@@ -441,7 +451,8 @@ python scripts/regenerate.py --compare baseline pre-migration --compare-json</co
 <p><strong>Structure:</strong></p>
 <pre><code>{
   "&lt;slug&gt;/&lt;FormDisplayName&gt;": [
-    {"name": "FieldApiName", "label": "Display Label", "type": "DataType"},
+    {"name": "FieldApiName", "label": "Display Label", "type": "DataType",
+     "options": ["Choice A", "Choice B"]},
     ...
   ]
 }</code></pre>
@@ -449,6 +460,7 @@ python scripts/regenerate.py --compare baseline pre-migration --compare-json</co
 <li>Keys are workspace-qualified (<code>"&lt;slug&gt;/&lt;FormDisplayName&gt;"</code>) so forms that share a display name across workspaces are distinct entries. Example: <code>"workspace-a/Customer Account"</code> vs <code>"workspace-b/Customer Account"</code>.</li>
 <li>Field arrays follow discovery order (design-tree order for individual exports; definition order for workspace exports).</li>
 <li>Lookup stubs (forms referenced but not exported) have an empty field array <code>[]</code>.</li>
+<li><strong><code>options</code></strong> is present only on fields that carry a choice list (dropdowns and similar), parsed from <code>ExtraProperties.DataSourceValues</code> and ordered by <code>SortOrder</code>. Each entry is the value a workflow condition, Switch case, or <code>FieldAssignments</code> entry must compare against. <code>DataSourceValues</code> carries both a <code>Key</code> and a <code>Value</code> and <strong>they can differ</strong> (<code>Key: "Ready for Review"</code> / <code>Value: "Completed &amp; Ready for Review"</code>); only <code>Value</code> is published, because that is the side the engine matches — verified across the corpus, where every disambiguating comparison matches <code>Value</code> and none match <code>Key</code>. Publishing <code>Key</code> would hand consumers the string that silently never matches. The key is omitted rather than emitted empty so the file does not grow by an empty array on each of ~10,800 fields.</li>
 <li>The file is generated by <code>emit_field_index()</code> in <code>regenerate.py</code>, which calls <code>discover_all()</code> and pulls <code>name</code>, <code>label</code>, and <code>type</code> from each field dict. Adding new keys to the per-field object is additive and safe; removing or renaming existing keys is a breaking change.</li>
 </ul>
 <hr>
@@ -583,17 +595,373 @@ all workspaces ─► parser.discover_all() ─► build_global.build() ─┬�
 <li><code>openpyxl</code> (install: <code>pip install openpyxl</code>)</li>
 <li>No other runtime dependencies.</li>
 </ul></section>
+  <section class="doc" id="workflow-engine"><h1 id="impact-workflow-engine-working-reference">IMPACT Workflow Engine — Working Reference</h1>
+<p><strong>Purpose.</strong> Two halves. <strong>Part I (§1–§10) is for <em>reading</strong></em> — what an exported workflow means, which is what <code>scripts/parser.py</code> decodes. <strong>Part II (§11) is for <em>writing</strong></em> — how to author a workflow JSON the platform will import. They are different formats and the difference is load-bearing; see §1.</p>
+<p><strong>Sources.</strong> Platform help export (<code>workflow_engine_help.txt</code>); five whole-workspace exports under <code>data/</code> (314 forms, 115 workflows); six individual workflow exports; form design exports; and direct observation of the workflow designer UI (2026-08).</p>
+<p><strong>Precedence rule.</strong> Where the help text and a production export disagree, <strong>the export wins</strong>. Where an export and the designer UI disagree, <strong>the UI wins</strong> — the export shows what one workspace happens to use, the UI shows what the product supports. The original Action Help page was written against a planned surface and never revised.</p>
+<hr>
+<h1 id="part-i-reading-an-export">Part I — Reading an export</h1>
+<h2 id="1-the-two-export-shapes">1. The two export shapes</h2>
+<p>The same workflow serializes <strong>two different ways</strong> depending on how you exported it. Confusing them is the single most common authoring mistake.</p>
+<table><thead><tr><th></th><th>whole-workspace export</th><th>individual workflow export</th></tr></thead><tbody><tr><td>where</td><td><code>data/&lt;slug&gt;/*.json</code>, under each form or a top-level <code>Workflows[]</code></td><td>one file per workflow</td></tr><tr><td>enums</td><td><strong>integers</strong></td><td><strong>strings</strong></td></tr><tr><td>GUIDs</td><td>real platform IDs, resolve within the file</td><td>synthetic <code>RefId</code>s + an <code>ExternalReferences</code> block</td></tr><tr><td>importable</td><td>no</td><td><strong>yes</strong></td></tr></tbody></table>
+<p><code>Update Existing Measures</code> exists in both forms in this repo, which pins the mapping exactly:</p>
+<table><thead><tr><th>field</th><th>integer (workspace)</th><th>string (individual)</th></tr></thead><tbody><tr><td><code>WorkflowEngineTriggerType</code></td><td><code>1</code></td><td><code>FormResponse</code></td></tr><tr><td><code>WorkflowEngineDatabaseActionType</code></td><td><code>2</code></td><td><code>Update</code></td></tr><tr><td><code>WorkflowEngineDatabaseActionTiming</code></td><td><code>2</code></td><td><code>PostProcessing</code></td></tr><tr><td><code>WorkflowEngineConditionMode</code></td><td><code>1</code></td><td><code>Basic</code></td></tr><tr><td><code>WorkflowEngineFieldChangeMatchMode</code></td><td><code>0</code></td><td><code>Any</code></td></tr><tr><td>parameter <code>ValueType</code></td><td><code>1</code></td><td><code>Static</code></td></tr></tbody></table>
+<p>Note <code>ConditionMode: "Basic"</code> is what the UI labels <strong>Filter Builder</strong> — the API value and the UI label differ.</p>
+<blockquote><p><strong>Not confirmed:</strong> <code>WorkflowEngineTriggerType: 4</code> (2 uses, both <code>Update Records</code> in sce-be) and <code>WorkflowEngineDatabaseActionType: 4</code> (1 use). The designer offers exactly three trigger types, so <code>4</code> is not a fourth type — the enum is non-contiguous, or <code>4</code> is legacy. No individual export of either workflow exists to read the string off.</p></blockquote>
+<h3 id="schema-tree">Schema tree</h3>
+<pre><code>Workspace
+├─ Id, Name, DisplayName, Description, IsVisible, IsSystem, IconClass, MenuName
+├─ Forms[]
+├─ SecurityPolicy{}
+└─ Workflows[]
+   ├─ SchemaVersion, Id, Name, Description, OwnerId, LayoutJson
+   ├─ Permissions[]
+   ├─ ExternalReferences[]        (individual exports only — see §11)
+   ├─ Triggers[]
+   │  └─ WorkflowEngineTriggerType, TargetEntityType,
+   │     WorkflowEngineDatabaseActionType, WorkflowEngineDatabaseActionTiming,
+   │     CronExpression, TimeZoneId, ExternalEventName,
+   │     WorkflowEngineConditionMode, ConditionExpression,
+   │     FormId, WorkspaceId, MonitoredFieldsJson,
+   │     WorkflowEngineFieldChangeMatchMode, Dependencies[]
+   └─ Steps[]
+      ├─ Name, SortOrder, IsEntryStep, ExecutionMode,
+      │  MaxRetries, RetryDelaySeconds, ConditionExpression
+      ├─ OutgoingTransitions[]  → Id, SourceStepId, TargetStepId,
+      │                           ConditionExpression, BranchName, SortOrder
+      └─ Actions[]
+         ├─ ActionType, DisplayName, SortOrder, ContinueOnError
+         └─ Parameters[]
+            └─ ParameterName, ValueType, StaticValue,
+               DynamicSourceField, FormulaExpression,
+               DataType, IsSecret, SortOrder</code></pre>
+<p>Workflows are <strong>versioned</strong> in the platform (the designer title bar shows <code>v15 · Enabled · Latest version</code>), but the version number is <strong>not carried in the export</strong> — <code>SchemaVersion: 1</code> is the export format version, not the workflow's. There is no way to tell from a file which revision it is.</p>
+<hr>
+<h2 id="2-triggers">2. Triggers</h2>
+<p>Three trigger types, matching the designer exactly: <strong>Form Response</strong>, <strong>Scheduled</strong>, <strong>Manual</strong>. (The old Action Help page's EntityCreated / EntityUpdated / EntityDeleted / Webhook types do not exist. Ignore them.)</p>
+<h3 id="form-response">Form Response</h3>
+<p><strong>Event Type</strong> — Create, Update, Create or Update, Delete. Serializes as <code>WorkflowEngineDatabaseActionType</code>; <code>Update</code> = <code>2</code> is confirmed, the rest are inferred.</p>
+<p><strong>Field-change scoping.</strong> <code>MonitoredFieldsJson</code> restricts an Update trigger to named fields:</p>
+<pre><code>["MAROMAReviewStatus","WorkflowTriggerCheckbox"]</code></pre>
+<p>The designer is explicit: <em>"Leave empty to trigger on any update to the form."</em> Set this on every status-driven workflow — without it the workflow fires on every save. 15 of 20 sce-be triggers use it.</p>
+<p><strong>Match Mode</strong> — <code>WorkflowEngineFieldChangeMatchMode</code>: <code>Any</code> (<code>0</code>) = "Any field changes (OR)", trigger if any monitored field is modified; the other option is "All fields change (AND)".</p>
+<h3 id="scheduled">Scheduled</h3>
+<p>The designer generates the cron for you. Observed panel:</p>
+<pre><code>Schedule Mode : Simple Builder          (implies a raw-cron mode as well)
+Time Zone     : America/Los_Angeles (UTC-08:00)
+                "wall-clock time is interpreted in this time zone.
+                 DST transitions are handled automatically."
+Frequency     : Daily
+Time          : 09:00 AM
+Generated Cron Expression : 0 9 * * *</code></pre>
+<p>So: <strong>5-field cron</strong>, <code>TimeZoneId</code> is an IANA zone, DST is handled by the platform. All three condition modes (None / Filter Builder / Expression) remain available on a scheduled trigger.</p>
+<blockquote><p><strong>Still unproven:</strong> no scheduled workflow exists anywhere in <code>data/</code>. <code>CronExpression</code> is null in every export on file. The constraints in §13 (no trigger record ⇒ <code>FromTrigger</code> and <code>TriggerRecord</code> unavailable; Current User resolves empty) are reasoned, not observed. Prove the first one on a single form before rolling it out.</p></blockquote>
+<h3 id="manual">Manual</h3>
+<p>Observed once (<code>Approved Measures</code>, LIWP). It still carries a vestigial <code>WorkflowEngineDatabaseActionType</code> (<code>"Create"</code>) that is not semantically meaningful.</p>
+<h3 id="dependencies">Dependencies</h3>
+<p>A trigger can declare that another workflow must run first:</p>
+<pre><code>"Dependencies": [
+  { "PrerequisiteRootDefinitionId": "&lt;RefId&gt;", "OnFailureBehavior": "RunAnyway" }
+]</code></pre>
+<p>with a matching <code>ExternalReferences</code> entry of <code>Type: "Workflow"</code> naming it. This is the mechanism for sequencing two workflows that would otherwise race on the same field. <strong>The inventory parser ignores <code>Dependencies</code> entirely</strong> — the explorer's write-conflict warning cannot see that a conflict has already been resolved this way.</p>
+<hr>
+<h2 id="3-conditions">3. Conditions</h2>
+<p><code>ConditionExpression</code> is <strong>not</strong> the text <code>FilterExpression</code> syntax the old Action Help page advertises (<code>{{Priority}} == 'High' &amp;&amp; ...</code>). That syntax does not exist. The real format is serialized condition-builder JSON, <strong>identical in both export shapes</strong> (operators stay integers even in the string-enum individual export).</p>
+<pre><code>{
+  "Operation": 1,
+  "Expressions": [
+    {
+      "FormId": "...", "FormFieldId": "...",
+      "FieldDataType": "Text", "Operation": 1, "Aggregation": 0,
+      "ResponseFieldValue": { "Value": "Ready for Review", "type": "ConstantTermDto" },
+      "ResponseFieldValueList": [],
+      "type": "FormFieldComparisonExpressionDto"
+    }
+  ],
+  "type": "GroupingDto"
+}</code></pre>
+<p><strong>Node types:</strong> <code>GroupingDto</code> (All/Any container), <code>FormFieldComparisonExpressionDto</code> (field vs value), <code>ComparisonDto</code> (record member vs value, e.g. <code>LastModifierId</code>), <code>ConstantTermDto</code>, <code>MemberTermDto</code>, <code>ContextTermDto</code> (an engine token such as <code>@FormResponseId</code>).</p>
+<p><code>FieldDataType: "Calculation"</code> is valid — <strong>conditions can target computed fields.</strong></p>
+<p>Groups nest, and each nested group carries its own All/Any. Step-level and transition-level <code>ConditionExpression</code> use the same format. Grid-embedded conditions are base64-encoded in <code>ExtraProperties</code> rather than plain JSON.</p>
+<h3 id="grouping-operators-confirmed">Grouping operators — confirmed</h3>
+<table><thead><tr><th><code>Operation</code></th><th>UI</th><th>meaning</th></tr></thead><tbody><tr><td><code>1</code></td><td>All</td><td>AND</td></tr><tr><td><code>2</code></td><td>Any</td><td>OR</td></tr></tbody></table>
+<h3 id="comparison-operators">Comparison operators</h3>
+<p>The operator list is <strong>per field type</strong>. A Text field offers exactly: Is, Is Not, Is In, Not In, Is Blank, Is Not Blank, Contains, Does Not Contain, Starts With, Ends With — <strong>no ordering operators at all</strong>. Numeric and date fields offer a different set. The enum is therefore non-contiguous, and dropdown position is <em>not</em> the enum value.</p>
+<table><thead><tr><th>code</th><th>n</th><th>operand shape</th><th>status</th></tr></thead><tbody><tr><td><code>1</code></td><td>106</td><td>scalar</td><td><strong>Is</strong> — confirmed in the designer</td></tr><tr><td><code>2</code></td><td>2</td><td>scalar</td><td><strong>Is Not</strong> — confirmed</td></tr><tr><td><code>6</code></td><td>7</td><td>scalar, Text</td><td>⚠ not decoded</td></tr><tr><td><code>7</code></td><td>9</td><td>scalar, Text</td><td>⚠ not decoded</td></tr><tr><td><code>9</code></td><td>3</td><td><strong>list</strong> (<code>ResponseFieldValueList</code>)</td><td>⚠ not decoded — membership operator (Is In / Not In)</td></tr><tr><td><code>10</code></td><td>1</td><td><strong>list</strong></td><td>⚠ not decoded — the other membership operator</td></tr><tr><td><code>12</code></td><td>32</td><td><strong>none</strong> (27 of 32 carry no operand)</td><td>⚠ not decoded — unary (Is Blank / Is Not Blank)</td></tr><tr><td><code>15</code></td><td>1</td><td>scalar, Date</td><td>⚠ not decoded</td></tr><tr><td><code>16</code></td><td>27</td><td><strong>none</strong> (24 of 27 carry no operand)</td><td>⚠ not decoded — the other unary</td></tr></tbody></table>
+<blockquote><p><strong>Note — four codes still need one designer lookup each.</strong> The pairs are identified by operand arity but not distinguished within a pair, and guessing wrong on <code>12</code>/<code>16</code> would <strong>invert the meaning of 59 conditions</strong>. <code>parser.py</code> deliberately renders every undecoded code as <code>?</code> rather than a plausible symbol. To resolve one: open the workflow below, open that condition's operator dropdown, and read the highlighted row.</p>
+<table><thead><tr><th>code</th><th>open</th><th>condition</th></tr></thead><tbody><tr><td><code>6</code></td><td>liwp · <em>Desktop Review</em></td><td><code>ReviewStatus</code> = 'Enrollment Approved'</td></tr><tr><td><code>7</code></td><td>sce-be · <em>Corrections Required - Final</em></td><td><code>InvoiceStatusSummary</code> = 'Pending Corrections'</td></tr><tr><td><code>12</code></td><td>liwp · <em>Note Added by Inspector</em></td><td><code>NoteReply</code></td></tr><tr><td><code>16</code></td><td>liwp · <em>Review Notification (Operations)</em></td><td><code>ReviewerName_c</code></td></tr></tbody></table>
+<p>A previous version of <code>parser.py</code> mapped <code>3/4/5/6</code> to <code>&lt; &lt;= &gt; &gt;=</code> on the assumption the enum followed the help text's list order. Those four appear <strong>nowhere</strong> in <code>data/</code>, while the six real codes were unmapped — and <code>6</code> rendered as <code>Review Status is at least 'Enrollment Approved'</code> on a Text field. Do not re-introduce a guess.</p></blockquote>
+<p><strong>Operand location matters.</strong> Membership operators put their operands in <code>ResponseFieldValueList</code> and leave the scalar <code>ResponseFieldValue</code> empty. Unary operators use neither — though a <strong>stale value can linger</strong> from before the operator was switched (5 of 32 code-<code>12</code> nodes carry a leftover across Text/Decimal/Date). Read the list first, then the scalar, and treat an absent scalar as unary.</p>
+<h3 id="choice-values-use-value-never-key">Choice values: use <code>Value</code>, never <code>Key</code></h3>
+<p>A dropdown's <code>ExtraProperties.DataSourceValues</code> is a list of <code>{Id, Key, Value, IsDefaultValue, SortOrder}</code>. <strong><code>Key</code> and <code>Value</code> can differ</strong>, and everything that matches a choice — trigger conditions, <code>TargetResolution</code> filters, Switch cases — matches <strong><code>Value</code></strong>.</p>
+<pre><code>ContractorSubmissionStatus:
+   Key "Ready for Review"   →   Value "Completed &amp; Ready for Review"     ← the engine matches this</code></pre>
+<p>Verified across the corpus: where the two differ, every disambiguating comparison matches <code>Value</code> and none match <code>Key</code>. <code>Key</code> is never emitted anywhere. <code>docs/field-index.json</code> publishes the <code>Value</code> side only, as an <code>options</code> array — 1,947 fields carry one. <strong>Check it before writing any condition literal.</strong></p>
+<h3 id="linked-record-fields">Linked-record fields</h3>
+<p>From the filter dialog: <em>"This field stores a link. Use a record ID to match the linked record itself, or a value to match the text displayed for it."</em> This is how forward target resolution works (§6) — match the child's link field against <code>{{@FormResponseId}}</code>.</p>
+<hr>
+<h2 id="4-node-types-action-condition-switch">4. Node types: Action, Condition, Switch</h2>
+<p>The <code>+</code> between nodes offers three things, not one. Only <strong>Action</strong> appears anywhere in <code>data/</code>; the other two are fully supported and simply unused so far.</p>
+<h3 id="action">Action</h3>
+<p>A step that does something. See §5.</p>
+<h3 id="condition">Condition</h3>
+<p>A boolean gate with <strong>True</strong> and <strong>False</strong> branches, each accepting its own chain of steps. Card shows <code>Expr — not set —</code> until configured.</p>
+<h3 id="switch">Switch</h3>
+<p>Multi-way branching.</p>
+<pre><code>Switch Source : ( ) Match on field        (•) Custom expression (advanced)
+Switch Field  : Review Status
+Cases         : MATCH WHEN VALUE EQUALS  |  BRANCH LABEL (OPTIONAL)
+                [ Pending Review      ▾ ] [                        ]
+                [ Corrections Required▾ ] [                        ]
+                [ Enrollment Approved ▾ ] [                        ]
+                + default branch (if no cases match)</code></pre>
+<p>Case values are drawn from the field's own option set — the <code>Value</code> side (§3). The card serializes its source as a token (<code>{{MAROMAReviewStatus}}</code>). The schema's <code>OutgoingTransitions[].BranchName</code> is this <strong>Branch Label</strong>.</p>
+<blockquote><p>Earlier revisions of this document concluded from the data ("26 steps, 3 transitions, all unconditional") that branching effectively did not exist. That was a fact about <em>this corpus</em>, not about the product. <strong>The parser models neither Condition nor Switch nodes and ignores <code>OutgoingTransitions</code> entirely</strong> — the first branching workflow anyone builds will appear in the inventory as a flat list of actions with the branch structure silently dropped.</p></blockquote>
+<hr>
+<h2 id="5-actions">5. Actions</h2>
+<p>The full palette, read off the Action Type dropdown:</p>
+<table><thead><tr><th>group</th><th>action</th><th>in <code>data/</code>?</th></tr></thead><tbody><tr><td><strong>Communication</strong></td><td>Send Email</td><td>16 uses</td></tr><tr><td></td><td>Send SMS</td><td>no</td></tr><tr><td><strong>Form Operations</strong></td><td>Create Form Response</td><td>yes</td></tr><tr><td></td><td>Update Form Response</td><td>yes</td></tr><tr><td></td><td>Upsert Form Response (Create or Update)</td><td>yes</td></tr><tr><td></td><td>Delete Form Response</td><td>2 uses</td></tr><tr><td></td><td>Set Field(s) on Trigger</td><td>no</td></tr><tr><td><strong>Document Generation</strong></td><td>Generate PDF</td><td>1 use</td></tr><tr><td><strong>Integration</strong></td><td>API Call</td><td>no</td></tr><tr><td></td><td>WebHook</td><td>no</td></tr></tbody></table>
+<p><strong>Genuinely absent from the product:</strong> Human Approval, Assign User, Generate Report. Strike them.</p>
+<blockquote><p><strong>Correction.</strong> An earlier revision claimed <code>WorkflowVariables.*</code> was unreachable because <code>SwitchCondition</code> and <code>ApiCall</code> were absent. Both premises were wrong: <strong>API Call is in the palette</strong>, Switch is a node type rather than an action, and the PDF Attachments help states the email <em>"uses that generated output from workflow variables"</em> — so Generate PDF → Send Email already passes values through workflow variables.</p></blockquote>
+<p><code>ContinueOnError</code> is per-action: <em>"the workflow will proceed to the next step even if this step fails. When disabled, an error in this step will stop the workflow."</em></p>
+<h3 id="builtinsendemail"><code>BuiltIn.SendEmail</code></h3>
+<table><thead><tr><th>Parameter</th><th>DataType</th></tr></thead><tbody><tr><td><code>Recipients</code></td><td><code>recipients</code></td></tr><tr><td><code>CC</code> / <code>BCC</code></td><td><code>recipients</code></td></tr><tr><td><code>Subject</code></td><td><code>memo</code></td></tr><tr><td><code>Body</code></td><td><code>memo</code> (HTML)</td></tr><tr><td><code>PdfAttachments</code></td><td><code>string</code> (JSON)</td></tr></tbody></table>
+<pre><code>[{ "templateId": "&lt;guid&gt;", "fileName": "BEP-APPROVAL_{{UniqueIDNumber}}.PDF" }]</code></pre>
+<p>PDF attachments reference <em>"the same PDF type or template used by an earlier Generate PDF action."</em> Filenames support token substitution.</p>
+<h3 id="form-operation-actions">Form-operation actions</h3>
+<p><code>FormId</code> (<code>form-picker</code>), <code>WorkspaceId</code>, <code>FieldAssignments</code> (JSON), <code>SubformOperations</code> (JSON), <code>AutoMapMatchingFields</code> (boolean), and the <code>TargetResolution.*</code> family (§6).</p>
+<p><strong>Match policy differs by action:</strong></p>
+<table><thead><tr><th>action</th><th>parameters</th></tr></thead><tbody><tr><td><code>UpdateFormResponse</code></td><td><code>MatchPolicy</code> — e.g. <code>Fail</code> ("Fail (error if multiple matches)")</td></tr><tr><td><code>UpsertFormResponse</code></td><td><code>NoMatchPolicy</code> (<code>Create</code>) + <code>MultipleMatchPolicy</code> (<code>UpdateFirst</code>)</td></tr><tr><td><code>CreateFormResponse</code></td><td><code>DuplicateMatchPolicy</code> (<code>Skip</code>)</td></tr></tbody></table>
+<p><strong>Auto-map:</strong> <em>"Automatically copy values from trigger form fields to target form fields when field names match (case-insensitive). Manual field assignments below will override auto-mapped values."</em></p>
+<hr>
+<h2 id="6-target-resolution-which-record-gets-written">6. Target resolution — which record gets written</h2>
+<p>Three modes. Pick by <strong>direction of travel</strong>.</p>
+<table><thead><tr><th>direction</th><th><code>TargetResolution.ResolutionType</code></th><th>UI label</th><th>how the target is found</th><th>n</th></tr></thead><tbody><tr><td><strong>forward</strong> — trigger → a related record</td><td><code>FilterBuilder</code></td><td>Filter Query</td><td>filter the target's link field against the trigger's key or <code>{{@FormResponseId}}</code></td><td>6</td></tr><tr><td><strong>backward</strong> — child → its parent</td><td><code>RelationshipField</code></td><td>—</td><td><code>TargetResolution.RelationshipFieldName</code> names the child's own link field</td><td>5</td></tr><tr><td><strong>same record</strong></td><td><code>TriggerRecord</code></td><td>Triggering Record</td><td>no <code>FormId</code>, no filter — acts on the record that fired</td><td>3</td></tr></tbody></table>
+<p>Worked examples from <code>data/</code>:</p>
+<pre><code>forward     Update Existing Measures        210 → 255      filter: EnrollmentNumber = {{@FormResponseId}}
+forward     Update Installation Contractor  300 → 315      filter: ESAKey = ESAKey
+backward    Update Account Status from 415  415 → 400      RelationshipFieldName: EnrollmentNumber
+same        Refresh Account                 400 → 400      (no target parameters at all)</code></pre>
+<p><code>FilterBuilder</code> is the only option available on a scheduled trigger — there is no trigger record to resolve from. (Reasoned, not observed; see §2.)</p>
+<p><strong>Target Workspace is a first-class picker.</strong> A workflow can write into a <em>different</em> workspace — LIWP's <code>Create System Tracker Record</code> writes into "MAROMA Test". Such an export carries two <code>Type: "Workspace"</code> references. The inventory has no model for cross-workspace targets and will show the target as dangling.</p>
+<hr>
+<h2 id="7-valuetype-and-fieldassignments">7. ValueType and FieldAssignments</h2>
+<p><code>FieldAssignments</code> is a JSON array on the action parameter of the same name:</p>
+<pre><code>[
+  { "FieldName": "UniqueIDNumber",    "ValueType": "TriggerRecordId", "Value": "" },
+  { "FieldName": "PrimaryContractor", "ValueType": "FromTrigger",     "Value": "AssignedContractorOrganization" },
+  { "FieldName": "EnrollmentStatus",  "ValueType": "Constant",        "Value": "Enrolled" },
+  { "FieldName": "ReviewDate",        "ValueType": "Expression",      "Value": "{{@CurrentDateTime}}" },
+  { "FieldName": "Reviewer",          "ValueType": "CurrentUser",     "Value": "" }
+]</code></pre>
+<p>The designer offers four buttons per assignment: <strong>Constant · Expression · From Trigger · Clear/Set Null</strong>.</p>
+<table><thead><tr><th>ValueType</th><th>string</th><th>status</th></tr></thead><tbody><tr><td>Constant</td><td><code>Constant</code></td><td>confirmed</td></tr><tr><td>From Trigger</td><td><code>FromTrigger</code></td><td>confirmed</td></tr><tr><td>Expression</td><td><code>Expression</code></td><td>confirmed — <code>Value</code> holds the expression text</td></tr><tr><td>Clear/Set Null</td><td>?</td><td>⚠ <strong>unknown</strong> — exists in the UI, used by no export on file</td></tr><tr><td>—</td><td><code>TriggerRecordId</code></td><td>confirmed</td></tr><tr><td>—</td><td><code>CurrentUser</code></td><td>confirmed</td></tr><tr><td>—</td><td><code>CurrentOrganization</code></td><td>observed</td></tr><tr><td>—</td><td><code>FromSourceSubform</code></td><td>confirmed (subform ops only)</td></tr></tbody></table>
+<p><strong>Copying a computed field freezes it.</strong> From the designer: <em>"Copying a computed (calculated) field copies its value as it stands when this action runs — it won't update later if the calculation's inputs change."</em> See §13 for why this matters.</p>
+<p><code>scripts/expand_field_assignments.py</code> generates this array from an Excel/CSV mapping, validating every name against <code>docs/field-index.json</code>. It supports Constant, FromTrigger, and Expression; a Clear/Set Null row is a hard error naming the row, because guessing the string would produce a workflow that imports and then misbehaves silently.</p>
+<h3 id="subformoperations">SubformOperations</h3>
+<pre><code>[{
+  "SubformFieldName": "WorkOrderMeasures",
+  "OperationType": "CopyRows",
+  "SubformFormId": "&lt;RefId&gt;",
+  "FieldAssignments": [
+    { "FieldName": "MeasureType", "ValueType": "Constant",          "Value": "Installation" },
+    { "FieldName": "MeasureQty",  "ValueType": "FromSourceSubform", "Value": "MIRQty" }
+  ],
+  "SourceSubformFieldName": "MeasureInstallationRequest",
+  "SourceSubformFormId": "&lt;RefId&gt;",
+  "AutoMapMatchingFields": false,
+  "SourceFilter": "&lt;double-escaped condition JSON&gt;",
+  "RowFilter": null,
+  "MatchPolicy": "All"
+}]</code></pre>
+<p><code>OperationType</code> is <code>Add</code> (one op per row) or <code>CopyRows</code> (copy matching rows from a source subform). <code>SourceFilter</code> is condition JSON <strong>escaped twice</strong> — it is a string inside a string. <code>scripts/expand_subform_ops.py</code> generates <code>Add</code> ops from a CSV.</p>
+<hr>
+<h2 id="8-email-recipients">8. Email recipients</h2>
+<p>Mode is an <strong>integer</strong>, serialized into a <code>recipients</code>-typed <code>StaticValue</code>:</p>
+<pre><code>[{ "mode": 1, "value": null, "organizationFilterId": null },
+ { "mode": 4, "value": "ProjectContactEmail", "organizationFilterId": null }]</code></pre>
+<p>The designer enumerates the modes in enum order — <em>"Static (enter emails), Creator (form creator), Current User, Role, Entity Field, or Specific Users"</em> — which confirms all six:</p>
+<table><thead><tr><th>Mode</th><th>Meaning</th><th>Value field</th><th>observed</th></tr></thead><tbody><tr><td><code>0</code></td><td>Static Email</td><td>address, or <code>;</code>-separated list</td><td>128</td></tr><tr><td><code>1</code></td><td>Creator (form creator)</td><td><code>null</code></td><td>17</td></tr><tr><td><code>2</code></td><td>Current User</td><td><code>null</code></td><td>—</td></tr><tr><td><code>3</code></td><td>Role</td><td>role selector</td><td>—</td></tr><tr><td><code>4</code></td><td>Entity Field</td><td>field name <strong>or bare system token</strong></td><td>93</td></tr><tr><td><code>5</code></td><td>Specific Users</td><td>user selector</td><td>—</td></tr></tbody></table>
+<p><code>organizationFilterId</code> is on every row, null in all observed cases.</p>
+<p><strong>Entity Field accepts system tokens without braces</strong> — <code>"value": "@LastModifier.Email"</code> is live in production.</p>
+<h3 id="resolution-behavior">Resolution behavior</h3>
+<ul>
+<li>Each row resolves independently; a failed row is skipped with a warning, others still send.</li>
+<li>If no row produces a valid address, the send is skipped — the workflow does <strong>not</strong> fail.</li>
+<li>Addresses are deduplicated across rows and modes.</li>
+<li>Static Email does <strong>not</strong> resolve tokens — a <code>{{Token}}</code> there is sent literally and fails validation.</li>
+<li><code>calc(...)</code> is not supported in recipient values.</li>
+<li><strong>Current User resolves empty on scheduled triggers.</strong> Use Static, Entity Field, or Role.</li>
+</ul>
+<hr>
+<h2 id="9-tokens">9. Tokens</h2>
+<h3 id="form-fields">Form fields</h3>
+<p><code>{{FieldName}}</code> — case-insensitive. <strong>Returns display text in Email and SMS bodies; returns the underlying stored value everywhere else.</strong> Use <code>.Text</code> explicitly whenever the label is what you want outside a message body.</p>
+<p>Typed accessors: <code>.Text</code> <code>.GuidValue</code> <code>.BooleanValue</code> <code>.DateTimeValue</code> <code>.IntValue</code> <code>.DecimalValue</code> <code>.DateTimeOffsetValue</code> <code>.TimeSpanValue</code></p>
+<h3 id="date-and-time">Date and time</h3>
+<p><code>{{@Today}}</code> <code>{{@Now}}</code> <code>{{@CurrentDate}}</code> <code>{{@CurrentDateTime}}</code> <code>{{@CurrentTime}}</code> <code>{{@Year}}</code> <code>{{@Month}}</code> <code>{{@Day}}</code> <code>{{@7DaysAgo}}</code> <code>{{@30DaysAgo}}</code> <code>{{@90DaysAgo}}</code> <code>{{@1YearAgo}}</code> <code>{{@StartOfWeek}}</code> <code>{{@StartOfMonth}}</code> <code>{{@StartOfYear}}</code> <code>{{@TodayUtc}}</code> <code>{{@NowUtc}}</code></p>
+<p>Date math: <code>{{@Today±Nd}}</code> <code>{{@Today±Nw}}</code> <code>{{@Today±Nm}}</code> <code>{{@Today±Ny}}</code> <code>{{@Now±Nh}}</code> <code>{{@Now±Nmin}}</code>, plus the <code>@CurrentDate</code> / <code>@CurrentDateTime</code> / <code>@TodayUtc</code> / <code>@NowUtc</code> variants.</p>
+<p>Format: dates <code>MM/dd/yyyy</code>, times <code>h:mm tt</code>.</p>
+<h3 id="record-and-user">Record and user</h3>
+<p><code>{{@FormResponseId}}</code> <code>{{@FormId}}</code> <code>{{@FormName}}</code> <code>{{@WorkspaceId}}</code> <code>{{@WorkspaceName}}</code></p>
+<p><code>{{@Creator.*}}</code> and <code>{{@LastModifier.*}}</code> — <code>.Id .Email .Name .UserName .FirstName .LastName .Phone .OrganizationId</code>; Creator additionally has <code>.Title</code> and <code>.Department</code>. <code>{{@CurrentUser.*}}</code> — same set as LastModifier. <code>{{@CreationTime}}</code> <code>{{@LastModificationTime}}</code>, each with <code>.Date</code> and <code>.Time</code>.</p>
+<h3 id="system">System</h3>
+<p><code>{{@TenantId}}</code> <code>{{@TenantName}}</code> <code>{{@ServerUrl}}</code> <code>{{@ResponseUrl}}</code> <code>{{@ResponseUrlLink}}</code> <code>{{@ApplicationVersion}}</code> <code>{{@Environment}}</code> <code>{{@WorkflowInstanceId}}</code> <code>{{@ExecutionId}}</code></p>
+<h3 id="lookup-dot-notation">Lookup dot-notation</h3>
+<p><strong>Organization:</strong> <code>.Name</code> <code>.Abbreviation</code> <code>.CustomerServiceNumber</code> <code>.Website</code> <code>.LicenseNumber</code> <code>.Region</code> <code>.EmailAddress</code> <strong>Employee:</strong> <code>.FullName</code> <code>.FirstName</code> <code>.LastName</code> <code>.Title</code> <code>.EmailAddress</code> <code>.PhoneNumber</code> <code>.BadgeNumber</code> <code>.Organization.Name</code> <code>.ManagerEmployee.FullName</code> <strong>Program:</strong> <code>.Name</code> <code>.ProgramStatus.Name</code></p>
+<h3 id="null-handling">Null handling</h3>
+<p>An unresolvable token is replaced with an empty string. The workflow does not fail. Always give tokens surrounding context so an empty value reads as blank rather than broken.</p>
+<hr>
+<h2 id="10-expressions-and-calc">10. Expressions and <code>calc()</code></h2>
+<p>These are <strong>two layers</strong>, not two competing syntaxes.</p>
+<h3 id="the-expression-layer">The Expression layer</h3>
+<p>The outer language, used by <code>ValueType: "Expression"</code> and by Condition Mode → Expression. Per the designer: <em>"Expressions support math (+,-,\</em>,/,%), logic (AND,OR,NOT,IN), and functions (ISNULL, LEN, TRIM, CONVERT). Reference fields with <code>{{FieldName}}</code>."*</p>
+<h3 id="calc-the-arithmetic-marker-inside-it"><code>calc(...)</code> — the arithmetic marker inside it</h3>
+<p>Per the designer's Calc Expressions help:</p>
+<blockquote><p><code>calc(...)</code> lets you do arithmetic on token values inside any Expression parameter or field assignment. The marker tells the workflow engine to evaluate the contents as math instead of substituting them as text. Everything outside <code>calc(...)</code> is plain <code>{{Token}}</code> substitution. There is no function library — just operators (<code>+ - * / %</code>), parentheses for grouping, numeric literals, date math via DateTime ± days, and <code>{{Token}}</code> references that resolve to typed values.</p></blockquote>
+<p>Any <code>{{Token}}</code> that works elsewhere works inside <code>calc()</code>, resolved as its <strong>typed</strong> value — numeric fields → decimal, date fields → DateTime, switch/checkbox → boolean.</p>
+<p><strong>Dates:</strong></p>
+<table><thead><tr><th>Expression</th><th>Result</th></tr></thead><tbody><tr><td><code>DateTime + number</code></td><td>adds days</td></tr><tr><td><code>DateTime - number</code></td><td>subtracts days</td></tr><tr><td><code>DateTime - DateTime</code></td><td>decimal days between</td></tr><tr><td><code>DateTime + DateTime</code></td><td><strong>null + warning</strong></td></tr></tbody></table>
+<p><strong>Type preservation:</strong> when the entire parameter value is one <code>calc(...)</code> block, the typed result is assigned directly — DateTime stays DateTime, decimal stays decimal. Embedded in text, the result is stringified (<code>MM/dd/yyyy</code> for dates, invariant-culture for numbers).</p>
+<p><strong>Null propagation:</strong> any null token inside <code>calc()</code> nulls the entire result. SQL semantics.</p>
+<p><strong>Limits:</strong> 4000-char body. Divide/modulo by zero → null + warning. Malformed syntax leaves the original text intact and logs a warning — it does not crash the action or delete content. HTML tags are stripped from the calc body before evaluation.</p>
+<p><strong>Prefer the shortcut:</strong> <code>{{@Today+7d}}</code> over <code>calc({{@Today}} + 7)</code>.</p>
+<hr>
+<h1 id="part-ii-authoring">Part II — Authoring</h1>
+<h2 id="11-writing-an-importable-workflow">11. Writing an importable workflow</h2>
+<p><strong>Import works.</strong> Field references are reconciled against the target workspace on import; mismatched names must be fixed up by hand at that point.</p>
+<h3 id="use-the-individual-export-shape">Use the individual-export shape</h3>
+<p>String enums throughout (§1). An integer where a string belongs is the most likely reason a hand-built file misbehaves.</p>
+<h3 id="the-externalreferences-contract">The <code>ExternalReferences</code> contract</h3>
+<p><code>RefId</code>s are <strong>synthetic, export-local identifiers</strong> — they are <em>not</em> the platform GUIDs you can read out of a whole-workspace export or <code>docs/field-index.json</code>. Every <code>RefId</code> minted in one export shares a batch suffix; the workspace export's real GUIDs use entirely different ones.</p>
+<p>What matters is that they are <strong>internally consistent</strong>: the trigger's <code>FormId</code>, each action's <code>FormId</code>, every <code>FormFieldId</code> inside a condition, and each <code>ExternalReferences[].RefId</code> must agree within the file. The block then names what each one <em>is</em>:</p>
+<table><thead><tr><th><code>Type</code></th><th>carries</th></tr></thead><tbody><tr><td><code>Form</code></td><td><code>WorkspaceName</code>, <code>FormName</code></td></tr><tr><td><code>FormField</code></td><td><code>WorkspaceName</code>, <code>FormName</code>, <code>FieldName</code></td></tr><tr><td><code>Workspace</code></td><td><code>WorkspaceName</code></td></tr><tr><td><code>User</code></td><td><code>UserName</code>, <code>Email</code></td></tr><tr><td><code>Workflow</code></td><td><code>WorkflowName</code> (for <code>Dependencies</code>)</td></tr></tbody></table>
+<p><strong>Safest path: clone a template.</strong> Start from an existing export of a similar workflow and reuse its <code>RefId</code>s, editing only names and parameters. Authoring wholly invented <code>RefId</code>s is untested.</p>
+<blockquote><p>⚠ <code>Type: "User"</code> entries carry real staff email addresses, and Static recipient rows (mode <code>0</code>) carry more. Redact before any export leaves internal hands.</p></blockquote>
+<h3 id="checklist">Checklist</h3>
+<ol>
+<li><strong>Pick the trigger.</strong> Form Response + Event Type, or Scheduled + cron, or Manual.</li>
+<li><strong>Scope it.</strong> Set <code>MonitoredFieldsJson</code> on any Update trigger, or it fires on every save.</li>
+<li><strong>Write the condition.</strong> Condition-builder JSON (§3). Look every literal up in <code>docs/field-index.json</code> → <code>options</code> — use the <code>Value</code> side.</li>
+<li><strong>Choose target resolution</strong> by direction (§6).</li>
+<li><strong>Assign fields.</strong> <code>Constant</code> / <code>FromTrigger</code> / <code>Expression</code> (§7). Generate bulk arrays with <code>scripts/expand_field_assignments.py</code> rather than by hand.</li>
+<li><strong>Set match policy</strong> — the parameter name differs per action type (§5).</li>
+<li><strong>Redact</strong> recipient addresses and <code>Type: "User"</code> entries.</li>
+<li><strong>Import, reconcile</strong> any fields the platform flags, and export the result back into <code>data/&lt;slug&gt;/workflows/</code> so the inventory sees it.</li>
+</ol>
+<h3 id="worked-example">Worked example</h3>
+<p><em>"When enrollment status is approved on the WHP enrollment form, email the contractor and stamp a field on the 315 assessment."</em></p>
+<ul>
+<li><strong>Trigger form</strong> — <code>310 - Enrollment Intake</code>, Update. The field labelled "Enrollment Status" there is <code>EnrollmentSubmissionStatus</code>; note <code>300 - Account Management</code> has a <em>different</em> field literally named <code>EnrollmentStatus</code>, and <code>Invoice</code> has a third. Prior art (<code>Desktop Review</code>, <code>Review Notification (Operations)</code>) monitors <code>EnrollmentSubmissionStatus</code>, which settles it.</li>
+<li><strong>Monitored fields</strong> — <code>["EnrollmentSubmissionStatus"]</code>.</li>
+<li><strong>Condition</strong> — that field <code>Is</code> the approved option, spelled exactly as <code>field-index.json</code> lists it.</li>
+<li><strong>Target</strong> — 310 and 315 do not link directly; both hang off <code>300</code> via <code>ESAKey</code>. So: forward resolution, <code>FilterBuilder</code>, filter <code>315.ESAKey = ESAKey</code>. <code>Update Installation Contractor for Form 315</code> already does exactly this and is the file to clone.</li>
+<li><strong>Email</strong> — a second step, <code>BuiltIn.SendEmail</code>, recipients mode <code>4</code> on the contractor address field.</li>
+</ul>
+<hr>
+<h1 id="part-iii-form-side-conventions">Part III — Form-side conventions</h1>
+<h2 id="12-form-design-invoice-v80">12. Form design (invoice v80)</h2>
+<h3 id="census">Census</h3>
+<p>191 nodes. ComponentTypes: Computed 41, TwoWideLayout 27, FormRelationshipReferenceDataInput 24, DateInput 17, TextInput 11, StackedLayout 11, DropDownInput 8, NumberInput 8, FormSection 8, TextAreaInput 6, FormGrid 5, OrganizationSelect 4, EmployeeSelect 4, UploadInput 4, ThreeWideLayout 4, SwitchInput 3, FormPage 2, FormRelationshipInput 2, Header 1.</p>
+<p>DataTypes: Text 43, Calculation 42, Date 15, Files 14, Decimal 9, Boolean 3, DateTime 3, Guid 2, Integer 1.</p>
+<h3 id="review-grids-newest-first">Review grids — newest-first</h3>
+<table><thead><tr><th>Grid</th><th>Status column</th><th>Date column</th><th>Sort</th></tr></thead><tbody><tr><td><code>InvoiceDetails</code></td><td><code>StatusFinal</code></td><td><code>StatusDate</code></td><td><code>SortDirection: 2</code> (desc)</td></tr><tr><td><code>DownPaymentReviewGrid</code></td><td><code>DownPaymentStatus</code></td><td><code>StatusDate_DP</code></td><td><code>SortDirection: 2</code> (desc)</td></tr></tbody></table>
+<p><code>grid[0]</code> is the current state. Individual approver fields retain stale values when new rows are added above them — <strong>always read the grid, never the flat field.</strong></p>
+<h3 id="option-sets">Option sets</h3>
+<p><code>StatusFinal</code> and <code>DownPaymentStatus</code> share one vocabulary: Received (default), In Review, Pending Corrections, Rejected, Corrections Submitted, Approved.</p>
+<p>Option sets live in <code>ExtraProperties.DataSourceValues</code> and are published for every form into <code>docs/field-index.json</code> as an <code>options</code> array — see §3 for the <code>Key</code> vs <code>Value</code> rule.</p>
+<h3 id="advanced-configuration-blocks">Advanced configuration blocks</h3>
+<p>Each field carries up to four independent script hooks:</p>
+<table><thead><tr><th>Property</th><th>Function</th></tr></thead><tbody><tr><td><code>ValueAdvancedConfiguration</code></td><td><code>SetValue</code></td></tr><tr><td><code>HiddenAdvancedConfiguration</code></td><td><code>SetVisibility</code></td></tr><tr><td><code>EnabledAdvancedConfiguration</code></td><td><code>SetEnabled</code></td></tr><tr><td><code>RequiredAdvancedConfiguration</code></td><td><code>SetRequired</code></td></tr></tbody></table>
+<p>Each has <code>Configuration</code> (JS), <code>Expression</code> (base64 condition JSON — mutually exclusive with <code>Configuration</code>), <code>ClearValueOnTrue</code>, <code>ClearValueOnFalse</code>, and a <code>Fields[]</code> dependency array of <code>{ModelKey, FieldName}</code> declaring what the script reads.</p>
+<p><code>Required</code> / <code>Hidden</code> / <code>Enabled</code> are integer enums; <code>3</code> indicates an advanced-configuration hook is attached.</p>
+<h3 id="existing-date-counter-pattern">Existing date-counter pattern</h3>
+<p><code>ThirtyDayPaymentCounter_Final</code> and <code>InvoiceDueDate_Final</code> both: read a stored Date field → guard empty → <code>new Date(x)</code> → <code>setDate(getDate() + N)</code> → return <code>MM/DD/YYYY</code> <strong>string</strong>.</p>
+<blockquote><p>String returns fail FilterBuilder date comparisons. Fine for display. Use ISO 8601 or a Date object for anything a workflow needs to filter on.</p></blockquote>
+<hr>
+<h2 id="13-design-spec-3-day-correction-timer">13. Design spec — 3-day correction timer</h2>
+<h3 id="requirement">Requirement</h3>
+<p>When an invoice is set to Pending Corrections, the contractor has 3 days to correct. After that window, a re-dated invoice is required.</p>
+<h3 id="key-insight">Key insight</h3>
+<p><strong>No new stored start-date field is needed.</strong> <code>InvoiceDetails</code> already records the correction start: when <code>grid[0].StatusFinal == "Pending Corrections"</code>, <code>grid[0].StatusDate</code> is the clock start. Grid rows are immutable history, so the value latches itself. No stamping workflow required.</p>
+<h3 id="stale-vs-safe-computed-fields">Stale vs. safe computed fields</h3>
+<p>A Calculation field goes stale <strong>only if it reads the current date.</strong> One derived purely from stored inputs computes at save and stays correct indefinitely, because its inputs never change.</p>
+<table><thead><tr><th>Field</th><th>Inputs</th><th>Stale?</th><th>Filterable</th></tr></thead><tbody><tr><td><code>CorrectionsDueDate</code></td><td><code>grid[0].StatusDate</code> + 3</td><td>No</td><td><strong>Yes</strong></td></tr><tr><td><code>CorrectionDaysRemaining</code></td><td>current date</td><td>Yes</td><td><strong>No — display only</strong></td></tr></tbody></table>
+<pre><code>CorrectionsDueDate       → grid[0].StatusFinal == "Pending Corrections"
+                            ? ISO(grid[0].StatusDate + 3)
+                            : null
+CorrectionDaysRemaining  → ceil((CorrectionsDueDate - today) / 86400000)
+                            negative = expired</code></pre>
+<p>Return <code>CorrectionsDueDate</code> as ISO 8601 or a Date object, <strong>not</strong> <code>MM/DD/YYYY</code>. This is the most likely silent failure point in the build.</p>
+<h3 id="scheduled-sweep">Scheduled sweep</h3>
+<pre><code>Trigger:  Scheduled
+Schedule: Simple Builder → Daily → 02:00 AM   (generates 0 2 * * *)
+TimeZone: America/Los_Angeles                 (DST handled by the platform)
+
+Condition (Filter Builder):
+  InvoiceStatusSummary   Is         "Pending Corrections"
+  AND CorrectionsDueDate &lt;before&gt;   {{@Today}}          ← operator code not yet decoded (§3)
+
+Action: BuiltIn.UpdateFormResponse
+  TargetResolution.ResolutionType: FilterBuilder
+  FieldAssignments: expiry flag
+Then:   BuiltIn.SendEmail, recipient mode 4 (Entity Field) on contractor address</code></pre>
+<p>Constraints on scheduled triggers:</p>
+<ul>
+<li>No trigger record → <code>FromTrigger</code> and <code>TriggerRecord</code> both unavailable.</li>
+<li>Current User resolves empty → Static, Entity Field, or Role recipients only.</li>
+<li><strong>Nothing in <code>data/</code> uses <code>CronExpression</code> or <code>TimeZoneId</code>.</strong> This would be the first scheduled workflow — prove it on one form before rolling it to the other invoice variants.</li>
+</ul>
+<p>Optional day-2 reminder: same shape, filter <code>CorrectionsDueDate</code> equals <code>{{@Today+1d}}</code>.</p>
+<h3 id="enforcement">Enforcement</h3>
+<p><code>Invoice_Final</code>'s existing <code>SetEnabled</code> already restricts contractor edits to <code>InvoiceStatusSummary</code> in <code>["", "Pending Review", "Pending Corrections"]</code> — the edit window is already status-bound.</p>
+<p>The stated requirement ("new invoice with an updated date") maps onto an existing field: when <code>CorrectionDaysRemaining &lt; 0</code>, require <code>InvoiceDate_Final</code> to be later than <code>grid[0].StatusDate</code>. This forces a genuinely re-dated invoice rather than a status flip.</p>
+<p><strong>Why not attachment-based enforcement:</strong> <code>UploadInput</code> exposes no per-file timestamp (<code>Mode: 1</code>, <code>DataType: Files</code>, no date property in the design export). Detecting a "new" attachment would require a file-count comparison against a stored baseline. Avoid it — the date rule is cleaner and matches the stated requirement.</p>
+<h3 id="flag-reminder">Flag / reminder</h3>
+<p>No popup action exists. The closest equivalent is a <code>Hidden</code>-conditioned HTML banner driven by <code>CorrectionDaysRemaining</code>, rendering when the record is opened — which is when the contractor would act anyway.</p>
+<hr>
+<h2 id="14-open-items">14. Open items</h2>
+<p><strong>Blocking a confident build:</strong></p>
+<ol>
+<li><strong>Comparison operator codes <code>6</code>, <code>7</code>, <code>12</code>, <code>16</code></strong> — one designer lookup each (§3). <code>12</code>/<code>16</code> gate 59 conditions and guessing inverts them.</li>
+<li><strong><code>Clear/Set Null</code> ValueType string</strong> (§7) — build one assignment using it and export.</li>
+<li>Does the expired invoice re-date in place, or spawn a new record? The form carries a single <code>InvoiceNumber_Final</code> / <code>InvoiceDate_Final</code> pair with the grid as history, which reads as in-place. If Finance needs the expired attempt preserved separately, the sweep becomes <code>CreateFormResponse</code> + <code>DuplicateMatchPolicy: Skip</code> + a lineage field — a different build.</li>
+<li>Does the same 3-day rule apply to <code>DownPaymentStatus</code>?</li>
+</ol>
+<p><strong>Verify before relying on:</strong></p>
+<ol>
+<li>Trigger type <code>4</code> and database action <code>4</code> (§1) — no individual export of either workflow exists.</li>
+<li>Whether Calculation-field values persist in a form the Filter Builder can query. The condition JSON accepts <code>FieldDataType: "Calculation"</code>, but persistence is untested here.</li>
+<li>The scheduled-trigger constraints in §13 — reasoned from "there is no trigger record", not observed.</li>
+</ol>
+<p><strong>Inventory gaps (this repo, not the platform):</strong></p>
+<ol>
+<li><code>Dependencies</code> is not parsed — workflow-to-workflow sequencing is invisible, including where it already resolves a flagged write conflict.</li>
+<li>Condition and Switch nodes are not modelled; <code>OutgoingTransitions</code> is ignored. The first branching workflow will import fine and appear in the inventory as a flat action list.</li>
+<li>Cross-workspace action targets have no model — the target shows as dangling.</li>
+<li>Workflow version numbers are not in the export, so the version-history machinery that works for forms has nothing to key on.</li>
+</ol>
+<p><strong>Documentation gaps:</strong></p>
+<ol>
+<li><code>parameter-types</code> and <code>formula-expressions</code> concept pages — cross-referenced in every Related Concepts footer, absent from the help export. §7 and §10 are the substitute.</li>
+</ol></section>
   <section class="doc" id="changelog"><h1 id="todo">TODO</h1>
 <h2 id="active">Active</h2>
 <p>(none — plans/01–03 executed 2026-07-02, see Done below. The plan documents were removed 2026-07-16 in the markdown consolidation; recover them from git history if the design detail is ever needed.)</p>
 <h2 id="candidates">Candidates</h2>
 <ul>
-<li><code>expand_field_assignments.py</code> only supports Assignment Type <code>Constant</code> and <code>FromTrigger</code>. The platform's <code>Expression</code> (computed <code>{{FieldName}}</code> template values) and <code>Clear/Set Null</code> types have no precedent anywhere in <code>data/</code> — no confirmed literal <code>ValueType</code> string to emit, so rows using either are a hard error rather than a guess. Unblock by exporting a real workflow that uses one of these from the platform UI so the exact string (and, for Expression, the <code>Value</code> shape) can be read off a real file; then extend <code>TYPE_ALIASES</code>/<code>build_assignments</code> the same way <code>FromTrigger</code>/<code>Constant</code> are handled today.</li>
-<li>Verify the Legacy condition operator enum. Workspace-export trigger conditions render some text-field comparisons as <code>&gt;=</code> (e.g. "Review Status is at least 'Corrections Required'") where equality is almost certainly meant, and operation 12 renders as <code>?</code> ("compares to" in plain English). The op map in <code>parser._expr_to_text</code> was built for WFEngine exports; the Legacy enum may differ. Needs platform documentation or a controlled experiment — do not guess-change the mapping.</li>
+<li><code>expand_field_assignments.py</code> still rejects Assignment Type <code>Clear/Set Null</code>. It is the fourth button in the designer's field-assignment control, but no exported workflow anywhere in <code>data/</code> uses it, so its literal <code>ValueType</code> string is unknown and a row using it is a hard error naming the row rather than a guessed string. Unblock by building one assignment with it in the designer and exporting that workflow; then extend <code>TYPE_ALIASES</code>/<code>build_assignments</code> the way <code>Expression</code> was. (<code>Expression</code> itself is <strong>done</strong> — see Done below.)</li>
+<li><strong>Decode condition operator codes 6, 7, 12, and 16.</strong> <code>parser._expr_to_text</code> maps only the two codes whose designer label has actually been read (<code>1</code> Is, <code>2</code> Is Not); every other code renders <code>?</code>. Operand arity narrows them — <code>9</code>/<code>10</code> are the membership pair (they populate <code>ResponseFieldValueList</code>), <code>12</code>/<code>16</code> are the blank pair (27 of 32 and 24 of 27 nodes carry no operand at all) — but nothing distinguishes <em>within</em> a pair, and getting <code>12</code>/<code>16</code> backwards would invert the meaning of 59 conditions. Resolve with one designer lookup each; the exact workflow and condition for all four are listed in <code>workflow-engine-reference.md</code> §3. Do not re-introduce a guessed mapping: the previous one assumed the enum followed the help text's list order, mapped four codes that appear nowhere in <code>data/</code>, and rendered code 6 as "is at least" on a Text field.</li>
 <li>Render record-metadata <code>Comparison</code> guards (LastModifierId vs user GUIDs) compactly instead of dropping them — e.g. one "(plus N system-user rules)" suffix. They're currently filtered out of condition text deliberately (14 GUID clauses drown the readable part, and their operator enum is unverified).</li>
+<li><strong>Model Condition and Switch nodes.</strong> The designer's <code>+</code> offers Action, Condition (True/False branches), and Switch (field or custom expression, one branch per case, plus a default). No workflow in <code>data/</code> uses either yet, so the parser models only Actions and ignores <code>Steps[].OutgoingTransitions</code> entirely. The first branching workflow anyone builds will import fine and appear in the inventory as a flat action list with the branch structure silently dropped.</li>
+<li><strong>Parse trigger <code>Dependencies</code>.</strong> A trigger can declare <code>{PrerequisiteRootDefinitionId, OnFailureBehavior}</code> with a <code>Type: "Workflow"</code> external reference — workflow-to-workflow sequencing. It is ignored today, so <code>narrate.build_workflow_conflicts</code> can flag a write race that a dependency has already resolved.</li>
+<li><strong>Cross-workspace action targets.</strong> A workflow can write into a different workspace (LIWP's <code>Create System Tracker Record</code> targets "MAROMA Test"); such exports carry two <code>Type: "Workspace"</code> references. The inventory has no model for this and shows the target as dangling.</li>
+<li>Workflow version numbers (the designer's <code>v15 · Latest version</code>) are not carried in the export, so the version-history machinery that works for forms has nothing to key on for workflows.</li>
 <li>Snapshot blobs in git history turned out to be a non-issue: measured 2026-07-16, all superseded snapshot blobs together pack to ~4.6 MB (git compresses the repetitive JSON ~20:1), so a history rewrite was evaluated and <strong>skipped</strong> — not worth a force-push + fresh clones for that saving. Revisit only if <code>git count-objects -vH</code> size-pack grows materially; GitHub's &gt;50 MB per-file push warning on new snapshots is about raw file size and is expected/harmless (hard limit is 100 MB).</li>
 </ul>
 <h2 id="done">Done</h2>
+<p><strong>Platform semantics captured; option sets, operators, and Expression (2026-08-24).</strong> <code>workflow-engine-reference.md</code> was rewritten from a read-only schema note into a two-part reference — Part I (reading an export) and Part II (authoring an importable one) — and wired into the docs viewer as its own "Workflow Engine" tab, with a pointer from CLAUDE.md. Six individual workflow exports plus direct designer observation settled a lot that had been guessed at: the whole-workspace export uses <strong>integer</strong> enums while the individual (importable) export uses <strong>strings</strong>, and <code>Update Existing Measures</code> existing in both forms pins the mapping exactly; <code>RefId</code>s are synthetic per-export identifiers, not platform GUIDs; the action palette contains API Call and WebHook (so <code>WorkflowVariables.*</code> is reachable, correcting an earlier conclusion) while Human Approval, Assign User, and Generate Report do not exist at all; email recipient modes 2/3/5 are confirmed rather than inferred; <code>Expression</code> and <code>calc()</code> are layered rather than competing; and target resolution is a three-way choice by direction of travel (<code>FilterBuilder</code> forward, <code>RelationshipField</code> backward, <code>TriggerRecord</code> same-record).</p>
+<p>Four code changes followed. (1) <strong>Option sets are extracted</strong> from <code>ExtraProperties.DataSourceValues</code> into <code>field["options"]</code>/<code>optionDefault</code> and published in <code>docs/field-index.json</code> as an additive <code>options</code> key — 1,947 fields across 314 forms. Only the <code>Value</code> side is published: <code>Key</code> and <code>Value</code> differ on some fields and every disambiguating comparison in the corpus matches <code>Value</code>, so publishing <code>Key</code> would hand authors the string the engine will not match. (2) <strong>The operator map was de-guessed</strong> — codes 3/4/5/6 were mapped on a false assumption about enum ordering, appear nowhere in <code>data/</code>, and code 6 rendered "is at least" on a Text field; and the real bug was that <code>_expr_to_text</code> read only the scalar <code>ResponseFieldValue</code>, so membership operators lost their entire operand list. 36 conditions now render operands that were previously discarded. (3) <strong><code>Expression</code> is supported</strong> in <code>expand_field_assignments.py</code>, with <code>{{Token}}</code> references validated against the trigger form (engine <code>@</code>-tokens pass through; unknown plain tokens warn rather than error). (4) <strong><code>TriggerRecord</code> targets resolve</strong> to the trigger form, so the three self-updating workflows name a form instead of narrating "Updates a record" and contributing no edge. Also added blockquote support to <code>md_render.py</code> (rendered recursively, so quoted tables and lists work). 56 tests.</p>
 <p><strong>UI, security, and reliability hardening (2026-08-13).</strong> Explorers now run fully offline from vendored, pinned graph libraries; use responsive mobile detail sheets; provide keyboard-accessible DOM node navigation; preserve workflow-type colors through theme changes; synchronize reset/search/filter state; report clipboard failures; and cap/index bulk field expansion. Public pages redact notification recipients and safely encode source-derived HTML, inline arguments, preset data, titles, and brief links. Launchers now validate selection input and align branch behavior. Parser failures warn instead of disappearing or aborting discovery. Snapshot IDs are collision-resistant and snapshot/manifest updates are locked and atomic. Discovery results are cached across the full rebuild, removing repeated parsing. Added repository-wide sensitive-data scanning, responsive/accessibility regression contracts, and exact dependency pins.</p>
 <p><strong>FieldAssignments generator (2026-07-16).</strong> New <code>scripts/expand_field_assignments.py</code>, sibling to <code>expand_subform_ops.py</code>, mass-generates a WFEngine workflow's top-level <code>FieldAssignments</code> parameter (the "copy field X from the trigger form to field Y on the target form" pattern, e.g. sce-be's "Update Existing Measures" workflow) from an Excel mapping (<code>Field Name (Current Form)</code> / <code>Field Assignment Type</code> / <code>Resolution (Field Name)</code> — the three-column format staff already use, read via <code>openpyxl</code>, already a repo dependency). Same <code>docs/field-index.json</code> validation, same dry-run/<code>--apply</code> convention as the subform generator. Deliberately scoped to <code>Constant</code>/<code>FromTrigger</code> only — real data in <code>data/</code> confirms those two plus <code>TriggerRecordId</code>/<code>CurrentOrganization</code>/<code>CurrentUser</code> as the only <code>ValueType</code>s ever exported, with <strong>no precedent for <code>Expression</code> or <code>Clear/Set Null</code></strong> anywhere in the repo, so rows using either are a hard error rather than a guessed platform string (tracked under Candidates). Verified against a real sce-be workflow (210 -&gt; 255 measure copy): generated output parses through the existing <code>_parse_field_assignments</code> path unmodified (no parser changes needed — this shape was already supported) and narrates correctly ("Updates the matching 255 - BE Installation Form record, filling in two fields automatically."). 11 new unit tests.</p>
 <p><strong>Docs viewer + markdown consolidation (2026-07-16).</strong> The landing page gained a "Project documentation" card: <code>emit_project_docs()</code> renders the repo's markdown files (README, CLAUDE.md as "Architecture", TODO.md as "Changelog", NOTICE) into <code>docs/docs.html</code> — one page, one tab per file, <code>#hash</code> deep links — using the new <code>scripts/md_render.py</code>, a stdlib-only deterministic Markdown-to-HTML converter (no client-side JS markdown library, consistent with the repo's zero-dependency HTML generation). Regenerated on every rebuild like the other views. Consolidation: the executed <code>plans/01–03</code> documents were deleted (their outcomes are the Done entries below; git history keeps the full text), leaving four markdown files — README.md, CLAUDE.md, TODO.md, NOTICE.md — each with a distinct audience. Also evaluated and <strong>skipped</strong> the snapshot history rewrite floated earlier: measured, all superseded snapshot blobs pack to ~4.6 MB total, not worth a force-push (see Candidates).</p>

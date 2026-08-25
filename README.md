@@ -17,7 +17,7 @@ The browsable explorers are published via GitHub Pages, served from the `docs/` 
 
 **https://&lt;your-org&gt;.github.io/system-inventory/**
 
-The landing page lists every view — the global cross-workspace explorer, each workspace's explorer, and a **Project documentation** page (`docs.html`) that renders this README, the architecture notes (CLAUDE.md), the changelog (TODO.md), and NOTICE as browser tabs. The published views are regenerated into `docs/` on every rebuild, so each push updates the live site. Spreadsheets are not published; pull the `.xlsx` files from `output/` in the repo directly.
+The landing page lists every view — the global cross-workspace explorer, each workspace's explorer, and a **Project documentation** page (`docs.html`) that renders this README, the architecture notes (CLAUDE.md), the **workflow engine reference** (workflow-engine-reference.md), the changelog (TODO.md), and NOTICE as browser tabs. The published views are regenerated into `docs/` on every rebuild, so each push updates the live site. Spreadsheets are not published; pull the `.xlsx` files from `output/` in the repo directly.
 
 ## Purpose
 
@@ -28,6 +28,7 @@ The project answers questions about workflow automations and form architecture t
 - **Cross-workspace pattern detection** — given a workflow pattern, whether an equivalent already exists in another workspace. Surfaces consolidation candidates and standardization gaps.
 - **Architecture documentation** — a navigable map of the system for a new contributor or successor, without reading raw JSON.
 - **Bus-factor mitigation** — externalizes system knowledge that otherwise lives only with the people who built or maintained the workspaces.
+- **Workflow authoring** — `workflow-engine-reference.md` documents the platform itself: trigger and condition encodings, the action palette, target resolution, token and `calc()` syntax, and the shape of a workflow JSON the platform will import. Paired with `docs/field-index.json` (field names, types, and legal choice values) it is enough to build a new workflow against real field names rather than guesses.
 
 ### Common questions this answers
 
@@ -67,7 +68,7 @@ Across all workspaces:
 
 - **`output/global/cross-workspace-inventory.xlsx`** — every workspace in one workbook, plus form-name collision and duplicate-flow analysis.
 - **`output/global/global-explorer.html`** — single graph with each workspace as a cluster and duplicate form names linked across clusters. Form nodes link back into the per-workspace explorer.
-- **`docs/field-index.json`** — machine-readable field index published to GitHub Pages on every rebuild. Maps `"<slug>/<FormDisplayName>"` to an array of `{"name", "label", "type"}` for every field on that form, across all workspaces. This is a stable integration interface — its structure is a contract for external tools (currently a PDF field-mapper). Do not change key format or field names without migrating consumers.
+- **`docs/field-index.json`** — machine-readable field index published to GitHub Pages on every rebuild. Maps `"<slug>/<FormDisplayName>"` to an array of `{"name", "label", "type"}` for every field on that form, across all workspaces. Fields that carry a choice list also get an `"options"` array — the exact strings a workflow condition or field assignment must use. This is a stable integration interface — its structure is a contract for external tools (currently a PDF field-mapper). Do not change key format or field names without migrating consumers.
 
 ## Quick start with the guided refresh launcher
 
@@ -122,6 +123,7 @@ If something is missing it prints plain-English instructions instead of failing 
 │   ├── explorer_template.html   (per-workspace HTML template)
 │   ├── global_template.html     (global HTML template)
 │   └── regenerate.py            (rebuild orchestrator)
+├── workflow-engine-reference.md  (platform semantics: triggers, conditions, actions, authoring)
 ├── start.bat                    (Windows guided refresh launcher)
 ├── refresh-and-open.command     (macOS/Linux guided refresh launcher)
 ├── requirements.txt
