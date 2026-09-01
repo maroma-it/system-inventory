@@ -34,7 +34,7 @@ Current workspaces (whole-workspace export baseline; all five also carry root-le
 
 - `socal-whp` — **Workspace A** (97 forms / 43 workflows)
 - `sdge-whp` — **Workspace B** (46 forms / 23 workflows)
-- `sce-be` — **Workspace C** (36 forms / 20 workflows)
+- `sce-be` — **Workspace C** (36 forms / 22 workflows)
 - `liwp` — **Workspace D** (125 forms / 28 workflows)
 - `nve-qar` — **Workspace E** (10 forms / 1 workflow)
 
@@ -128,7 +128,7 @@ JSON sits — no manual tagging needed:
   carries an additive `subformAdds: [{subform, rows}]` key that narration renders as "…and adds four
   rows to WorkOrderMeasures". Malformed/absent SubformOperations degrade to no rows, same as
   `FieldAssignments`.
-  As of the 2026-07 re-export, **all five current workspace baselines use WFEngine** (115 workflows
+  As of the 2026-07 re-export, **all five current workspace baselines use WFEngine** (117 workflows
   total) — the Legacy embedded path is kept for back-compat but is currently dormant against real data.
 
 `WorkflowType` appears as a colored column in the Workflows and AllWorkflows sheets. In both explorers, workflow nodes — and their dashed trace edges — are red for Legacy and olive (`#9fae5a`) for WFEngine, colored from shared `--wf-legacy`/`--wf-engine` CSS vars; the legend reads "WF Engine". The Excel column fills (`build_inventory.py`) are light tints of the same palette (light red = Legacy, light olive = WFEngine), so the workbook and the graph read as one color scheme.

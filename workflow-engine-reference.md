@@ -6,7 +6,7 @@ workflow JSON the platform will import. They are different formats and the diffe
 see §1.
 
 **Sources.** Platform help export (`workflow_engine_help.txt`); five whole-workspace exports under
-`data/` (314 forms, 115 workflows); six individual workflow exports; form design exports; and direct
+`data/` (314 forms, 117 workflows); six individual workflow exports; form design exports; and direct
 observation of the workflow designer UI (2026-08).
 
 **Precedence rule.** Where the help text and a production export disagree, **the export wins**. Where
