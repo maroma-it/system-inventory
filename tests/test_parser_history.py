@@ -153,6 +153,29 @@ class DiscoverHistoryTests(unittest.TestCase):
         self.assertEqual(ws._read_json(broken, {"fallback": True}), {"fallback": True})
         self.assertTrue([w for w in parser.WARNINGS if "broken.json" in w and "invalid JSON" in w])
 
+    def test_malformed_root_export_aborts_discovery(self):
+        root = parser.DATA_DIR / "sandbox"
+        root.mkdir(parents=True)
+        (root / "workspace.json").write_text('{"Forms": [', encoding="utf-8")
+
+        with self.assertRaises(parser.InvalidWorkspaceExportError):
+            parser.Workspace("sandbox").discover()
+
+    def test_malformed_nested_override_warns_with_valid_baseline(self):
+        root = parser.DATA_DIR / "sandbox"
+        root.mkdir(parents=True)
+        (root / "workspace.json").write_text(
+            json.dumps({"Name": "Sandbox", "Forms": []}), encoding="utf-8")
+        forms = root / "forms"
+        forms.mkdir()
+        (forms / "broken.json").write_text('{"Components": [', encoding="utf-8")
+
+        data = parser.Workspace("sandbox").discover()
+
+        self.assertEqual(data["forms"], [])
+        self.assertTrue([w for w in parser.WARNINGS
+                         if "broken.json" in w and "unreadable form export" in w])
+
     def test_malformed_field_assignments_do_not_abort(self):
         self.assertEqual(parser._parse_field_assignments('{"not": "a list"}', "Target"), [])
         self.assertEqual(parser._parse_field_assignments('[null, 42]', "Target"), [])

@@ -23,6 +23,12 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # process. WARNINGS collects the warning subset for the end-of-run summary.
 _PRINTED_ONCE = set()
 WARNINGS = []
+
+
+class InvalidWorkspaceExportError(ValueError):
+    """A root-level export cannot be trusted as a workspace baseline."""
+
+
 _DISCOVERY_CACHE = {}
 
 def _print_once(msg):
@@ -1067,13 +1073,16 @@ class Workspace:
         self._root_form_files = []      # individual form exports found at the slug root
         self._root_workflow_files = []  # individual workflow exports found at the slug root
 
-    def _read_json(self, path, default):
+    def _read_json(self, path, default, *, fatal_invalid_json=False):
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
-                self._warn(f"  ! [{self.slug}] invalid JSON in {path.name}: "
-                           f"line {exc.lineno}, column {exc.colno}")
+                msg = (f"[{self.slug}] invalid JSON in {path.name}: "
+                       f"line {exc.lineno}, column {exc.colno}")
+                if fatal_invalid_json:
+                    raise InvalidWorkspaceExportError(msg) from exc
+                self._warn(f"  ! {msg}")
                 return default
             except OSError as exc:
                 self._warn(f"  ! [{self.slug}] cannot read {path.name}: {exc}")
@@ -1102,7 +1111,10 @@ class Workspace:
             self._root_form_files = []
             self._root_workflow_files = []
             for path in sorted(self.dir.glob("*.json")):
-                d = self._read_json(path, None)
+                # A malformed root JSON cannot be classified safely. It may be
+                # the workspace baseline, so fail closed rather than silently
+                # rebuilding from partial individual overrides.
+                d = self._read_json(path, None, fatal_invalid_json=True)
                 fmt = detect_format(d)
                 if fmt == "workspace":
                     self._ws_exports.append((path.name, parse_workspace_export(d)))

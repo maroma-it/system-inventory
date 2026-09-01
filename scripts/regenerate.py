@@ -31,7 +31,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from parser import Workspace, list_workspaces, discover_all, find_orphans, OUTPUT_DIR
+from parser import (Workspace, list_workspaces, discover_all, find_orphans,
+                    InvalidWorkspaceExportError, OUTPUT_DIR)
 import build_inventory
 import build_explorer
 import build_global
@@ -96,6 +97,12 @@ def rebuild_workspace(slug):
     else:
         print("  Orphans: none")
     return len(d["forms"]), len(d["workflows"])
+
+
+def _preflight(slugs):
+    """Discover selected workspaces before any generated artifact is written."""
+    for slug in slugs:
+        Workspace(slug).discover()
 
 
 def _print_summary(stats):
@@ -873,6 +880,7 @@ def main():
         return
 
     if args.global_only:
+        _preflight(slugs)
         publish_vendor_assets()
         print("[global]")
         build_global.build()
@@ -882,10 +890,11 @@ def main():
         return
 
     if args.workspace:
-        publish_vendor_assets()
         if args.workspace not in slugs:
             print(f"Unknown workspace '{args.workspace}'. Available: {', '.join(slugs)}")
             sys.exit(1)
+        _preflight([args.workspace])
+        publish_vendor_assets()
         stats = {args.workspace: rebuild_workspace(args.workspace)}
         print("\nGlobal aggregator not rebuilt (run with --global or no args to refresh it).")
         print("\n[docs] publish")
@@ -894,6 +903,7 @@ def main():
         return
 
     stats = {}
+    _preflight(slugs)
     publish_vendor_assets()
     for slug in slugs:
         stats[slug] = rebuild_workspace(slug)
@@ -913,4 +923,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except InvalidWorkspaceExportError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
