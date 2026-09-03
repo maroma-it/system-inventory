@@ -28,6 +28,12 @@ Thumbs.db
 *.private.json
 scratch/
 
+# Local reporting working folder. Holds DevExpress .rxml layouts (which embed the
+# production connection string), customer-data Excel exports, and a duplicate of a
+# data/ workspace export. docs/ is the GitHub Pages publish target, so nothing in
+# here may be tracked. Findings live in reviews/rxml-corpus-audit-*.md instead.
+docs/reporting/
+
 # Per-machine launcher preference (start.bat last-opened view)
 output/last-view.txt
 output/snapshots/.snapshot.lock
