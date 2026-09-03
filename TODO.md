@@ -51,6 +51,22 @@ if the design detail is ever needed.)
   limit is 100 MB).
 ## Done
 
+**sdge-whp re-baselined; SDGE reporting pipeline documented (2026-09-03).**
+`data/sdge-whp/` now carries a fresh whole-workspace export (46 forms / 26 workflows, up from 23). The
+six 2026-06 per-form design overrides (400, 410, 415, 425, 499 Measures, Invoice) were diffed against
+the new baseline first — every one was a strict subset with older formulas, so they were deleted per
+the documented re-baseline reset; sdge-whp is baseline-only and rebuilds with zero warnings and zero
+orphans. Snapshot compare (previous → latest) shows seven forms modified (415 alone gained 117
+fields), three new "Marked for Deletion" workflows, and 18 workflow signature changes. Alongside,
+`docs/reporting/SDGE-Reporting-Pipeline.md` (local, untracked — the folder also holds customer-data
+exports) documents the DevExpress XtraReports → Production export → Whole-Home workbook pipeline: the
+RXML runs five single-table SELECTs against `reporting.SDGE_Whole_Home_*` views with four
+master-detail relations on Enrollment # (the Invoice relation is unused), every export column is
+mapped to its platform field, the 400 form's Stage/Status/Reason/Path formulas are decoded, and nine
+workbook defects are listed (two reason literals with a stray trailing period that never match, two
+hard-coded Plus/Deep constants, a double-count in the Unable-to-Proceed block, a renamed-header
+dependency in `pivot!C5`, two malformed `TextFormatString`s in the RXML, and the dead Invoice query).
+
 **Platform semantics captured; option sets, operators, and Expression (2026-08-24).**
 `workflow-engine-reference.md` was rewritten from a read-only schema note into a two-part reference —
 Part I (reading an export) and Part II (authoring an importable one) — and wired into the docs viewer

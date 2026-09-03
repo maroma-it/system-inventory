@@ -30,10 +30,10 @@ A global aggregator combines every workspace into one view under `output/global/
 
 No output file is hand-edited. All are regenerated from the JSON exports in `data/`.
 
-Current workspaces (whole-workspace export baseline; all five also carry root-level individual design exports from 2026-06 that override their main forms):
+Current workspaces (whole-workspace export baseline; four of the five also carry root-level individual design exports from 2026-06 that override their main forms — `sdge-whp` was re-baselined on 2026-09-03 to a fresh export and its overrides were deleted, so it is baseline-only):
 
 - `socal-whp` — **Workspace A** (97 forms / 43 workflows)
-- `sdge-whp` — **Workspace B** (46 forms / 23 workflows)
+- `sdge-whp` — **Workspace B** (46 forms / 26 workflows)
 - `sce-be` — **Workspace C** (36 forms / 22 workflows)
 - `liwp` — **Workspace D** (125 forms / 28 workflows)
 - `nve-qar` — **Workspace E** (10 forms / 1 workflow)
