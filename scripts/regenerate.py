@@ -649,6 +649,7 @@ DOC_PAGES = [
     ("README", "README.md", "readme"),
     ("Architecture", "CLAUDE.md", "architecture"),
     ("Workflow Engine", "workflow-engine-reference.md", "workflow-engine"),
+    ("XtraReports", "xtrareports-reference.md", "xtrareports"),
     ("Changelog", "TODO.md", "changelog"),
     ("Notice", "NOTICE.md", "notice"),
 ]

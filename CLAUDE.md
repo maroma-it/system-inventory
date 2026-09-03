@@ -14,6 +14,13 @@ generating a workflow export. It also records which enum codes are still undecod
 deliberately renders those as `?` rather than guessing, and the reference names the exact workflow to
 open in the designer to resolve each one.
 
+A second platform sits alongside it: the DevExpress XtraReports layer that reports against the same
+workspaces. **`xtrareports-reference.md`** (docs tab "XtraReports") documents the `.rxml` layout
+format, its expression language, and the failure patterns worth auditing for. The reporting source
+files live in `docs/reporting/`, which is **gitignored** — they embed the production connection string
+and sit beside customer-data exports, and `docs/` is the Pages publish target. Findings from them are
+tracked in `reviews/`.
+
 ## What this project is
 
 A documentation system for platform forms and workflows. It ingests JSON exports (two supported formats — see *Ingestion formats* below), parses them into a normalized structure, and produces per-workspace and cross-workspace artifacts.

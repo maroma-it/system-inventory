@@ -8,6 +8,34 @@ if the design detail is ever needed.)
 
 ## Candidates
 
+- **Preset layout strands unpositioned nodes at the origin.** `explorer_template.html` runs the
+  `preset` layout whenever `manual/explorer_layout.json` exists, but `socal-whp`'s file names only 10 of
+  140 nodes; the other 131 (86 grids, 43 workflows) render stacked at (0,0). Fix: run preset for
+  positioned nodes, then a second layout for the rest — or nest grids as compound children and position
+  only top-level forms. Evidence in `reviews/2026-09-03-explorer-ui-review/`.
+- **The global explorer draws no edges.** `global_template.html` builds workspace and form nodes only;
+  no edge elements are ever created, though the stylesheet defines `dup-edge` and CLAUDE.md, README.md,
+  and the landing page all describe "duplicate form names linked across clusters". Compounding it, the
+  graph excludes Subforms while the collision sidebar includes them, so 24 of 27 collisions point at
+  nodes that do not exist and clicking them highlights nothing. Either draw the links for on-graph forms
+  or drop the canvas and make the sidebar tables the view.
+- **Subforms dominate the graph.** 259 of 314 forms are Subforms whose only edge is `(embedded grid)` to
+  a parent, so a force-directed layout spends most of its pixels on rows that carry no linkage
+  information. Collapsing grids into their parent by default would remove ~85% of nodes without losing
+  anything the panel does not already show.
+- **`Featured` has lost its meaning.** No workspace ships a `manual/featured_forms.json`, so the
+  `FEATURED_KEYWORDS` default applies and substring-matches the parent qualifier in grid names —
+  41 featured forms in `liwp`, 40 in `socal-whp`, gold rings on grids, landing-page chips full of them.
+  Restrict the default to non-Subform roles, or ship the manual files.
+- **Duplicate-flow signatures are degenerate.** 90 of 120 workflows collapse into one
+  `Update -> (no target)` bucket because email-only workflows have no target form; the sidebar section
+  conveys nothing. The registry's pattern key already solves this.
+- **Report literals should be checked against option sets.** `docs/field-index.json` already publishes
+  the legal `Value` strings per field, and report expressions compare against them — but the views also
+  still hold the older `Key` strings (see the 2026-09-03 Done entry). A checker that flags a literal
+  matching neither side, or only one side, would catch the defects listed in
+  `reviews/rxml-corpus-audit-2026-09-03.md` automatically. Natural home: `scripts/parse_rxml.py`, the
+  not-yet-written decoder described in `xtrareports-reference.md` Part V.
 - `expand_field_assignments.py` still rejects Assignment Type `Clear/Set Null`. It is the fourth
   button in the designer's field-assignment control, but no exported workflow anywhere in `data/`
   uses it, so its literal `ValueType` string is unknown and a row using it is a hard error naming the
@@ -50,6 +78,37 @@ if the design detail is ever needed.)
   warning on new snapshots is about raw file size and is expected/harmless (hard
   limit is 100 MB).
 ## Done
+
+**XtraReports reference + explorer UI review (2026-09-03).** Two audits landed under `reviews/`, and
+the reporting track gained its own reference doc.
+
+`xtrareports-reference.md` (docs tab "XtraReports") decodes the DevExpress XtraReports v25.2 `.rxml`
+layout format from the vendor docs plus eleven real layouts: the envelope and document-global `Ref`
+numbering, positional `ItemN` collections, bands, tables, cross-tabs, expression bindings, and the
+Base64-encoded `SqlDataSource` blob (queries, SQL-level joins, master-detail relations, cached
+`ResultSchema`). It also captures the expression language — operands, precedence, three-valued null
+semantics, aggregate scoping — and 23 detectable failure patterns. Corpus facts worth carrying: every
+`reporting.*` view column maps one-to-one onto a form field API name (so report columns can be resolved
+against `docs/field-index.json` offline); totals are bare `Sum(Iif(...))` calculated fields rather than
+`sum*` summary functions; and every date column the views expose is `Type="Unknown"` in the cached
+schema, the `datetimeoffset` signature.
+
+`reviews/rxml-corpus-audit-2026-09-03.md` records the per-report defects, the largest being a field
+reference (`[Clone Project]`) that resolves to nothing across ~220 expressions in both bi-weekly
+reports, twelve calculated fields bound to a nonexistent data member in both CARB exports, and — checked
+against a 4,826-row export — the fact that the SQL views hold **both** the option `Key` and the option
+`Value` for the same field over time (415 Submission Status: 181 rows `Bid Proposed`, 13 rows `Ready for
+Review`). Conditions testing one string under-count. That refines the "the engine matches `Value`" rule
+in `workflow-engine-reference.md`: true for new writes, not for stored history.
+
+`reviews/2026-09-03-explorer-ui-review/` assesses whether the graph layer is the most efficient way to
+read the system. Verdict: the side panel, briefs, and Excel are cohesive; the graph is not. Open items
+it names — a preset-layout bug that stacks 131 unpositioned nodes at the origin in `socal-whp`, a global
+explorer that builds no edge elements at all, degenerate duplicate-flow signatures, and a `Featured`
+keyword default that matches 40+ subform grids — are carried into Candidates below.
+
+`docs/reporting/` (the `.rxml` layouts and their customer-data exports) is **gitignored**: the files
+embed the production connection string, and `docs/` is the GitHub Pages publish target.
 
 **sdge-whp re-baselined; SDGE reporting pipeline documented (2026-09-03).**
 `data/sdge-whp/` now carries a fresh whole-workspace export (46 forms / 26 workflows, up from 23). The

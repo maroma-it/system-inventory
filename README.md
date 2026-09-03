@@ -17,7 +17,7 @@ The browsable explorers are published via GitHub Pages, served from the `docs/` 
 
 **https://&lt;your-org&gt;.github.io/system-inventory/**
 
-The landing page lists every view — the global cross-workspace explorer, each workspace's explorer, and a **Project documentation** page (`docs.html`) that renders this README, the architecture notes (CLAUDE.md), the **workflow engine reference** (workflow-engine-reference.md), the changelog (TODO.md), and NOTICE as browser tabs. The published views are regenerated into `docs/` on every rebuild, so each push updates the live site. Spreadsheets are not published; pull the `.xlsx` files from `output/` in the repo directly.
+The landing page lists every view — the global cross-workspace explorer, each workspace's explorer, and a **Project documentation** page (`docs.html`) that renders this README, the architecture notes (CLAUDE.md), the **workflow engine reference** (workflow-engine-reference.md), the **XtraReports reference** (xtrareports-reference.md), the changelog (TODO.md), and NOTICE as browser tabs. The published views are regenerated into `docs/` on every rebuild, so each push updates the live site. Spreadsheets are not published; pull the `.xlsx` files from `output/` in the repo directly.
 
 ## Purpose
 
